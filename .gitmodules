@@ -1,0 +1,6 @@
+[submodule "libs/inih"]
+	path = libs/inih
+	url = https://github.com/benhoyt/inih.git
+[submodule "libs/wingetopt"]
+	path = libs/wingetopt
+	url = https://github.com/alex85k/wingetopt.git
