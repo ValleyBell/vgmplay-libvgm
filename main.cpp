@@ -43,6 +43,9 @@
 #endif
 
 
+extern UINT8 PlayerMain(void);
+
+
 struct OptionItem
 {
 	unsigned char flags;    // 0 - no parameter, 1 - has 1 parameter
@@ -74,13 +77,10 @@ static const OptionList optionList =
 
 static std::vector<std::string> appSearchPaths;
 static std::vector<std::string> cfgFileNames;
-static Configuration playerCfg;
+       Configuration playerCfg;
 
-static std::vector<SongFileList> songList;
-static std::vector<std::string> plList;
-static int controlVal;
-static size_t curSong;
-
+       std::vector<SongFileList> songList;
+       std::vector<std::string> plList;
 
 #ifdef USE_WMAIN
 int wmain(int argc, wchar_t* wargv[])
@@ -171,26 +171,8 @@ int main(int argc, char* argv[])
 		return 0;
 	}
 	
-	//resVal = 0;
-	controlVal = +1;	// default: next song
-	for (curSong = 0; curSong < songList.size(); )
-	{
-		printf("File: %s\n", songList[curSong].fileName.c_str());
-		//PlayVGM();
-		if (controlVal == +1)
-		{
-			curSong ++;
-		}
-		else if (controlVal == -1)
-		{
-			if (curSong > 0)
-				curSong --;
-		}
-		else if (controlVal == +9)
-		{
-			break;
-		}
-	}
+	retVal = PlayerMain();
+	printf("Done.\n");
 	
 	return 0;
 }

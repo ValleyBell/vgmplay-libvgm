@@ -1,4 +1,4 @@
-project(vgmplay)
+project(vgmplay LANGUAGES C CXX)
 cmake_minimum_required(VERSION 3.1)
 
 #set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${PROJECT_BINARY_DIR}/bin)
@@ -90,19 +90,20 @@ endif()	# wingetopt
 
 
 set(PLAYER_HEADERS
-	m3uargparse.hpp
 	utils.hpp
 	config.hpp
+	m3uargparse.hpp
 )
 set(PLAYER_FILES
-	m3uargparse.cpp
 	utils.cpp
 	config.cpp
+	m3uargparse.cpp
 	main.cpp
+	player.cpp
 )
 
 add_executable(${PROJECT_NAME} ${HEADERS} ${SOURCES} ${PLAYER_HEADERS} ${PLAYER_FILES})
 target_include_directories(${PROJECT_NAME} PRIVATE ${PROJECT_SOURCE_DIR} ${INCLUDES})
-target_link_libraries(${PROJECT_NAME} PRIVATE ${LIBRARIES} vgm-audio vgm-player)
+target_link_libraries(${PROJECT_NAME} PRIVATE ${LIBRARIES} vgm-audio vgm-player vgm-utils)
 install(TARGETS ${PROJECT_NAME} RUNTIME DESTINATION "bin")
 #add_sanitizers(${PROJECT_NAME})
