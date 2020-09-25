@@ -63,6 +63,8 @@ static UINT8 OpenFile(const std::string& fileName, DATA_LOADER*& dLoad, PlayerBa
 static const char* GetTagForDisp(const std::map<std::string, std::string>& tags, const std::string& tagName);
 static void ShowSongInfo(PlayerBase* player);
 static UINT8 PlayFile(PlayerBase* player);
+static int GetPressedKey(void);
+static UINT8 HandleKeyPress(PlayerBase* player);
 static std::string FCC2Str(UINT32 fcc);
 static std::string GetTimeStr(double seconds, INT8 showHours = 0);
 static UINT8 GetPlayerForFile(DATA_LOADER *dLoad, PlayerBase** retPlayer);
@@ -79,11 +81,24 @@ static UINT8 StopAudioDevice(void);
 static void changemode(UINT8 noEcho);
 static int _kbhit(void);
 #define	_getch	getchar
+static void cls(void);
 #endif
 
 
 #define APP_NAME	"VGM Player"
 #define APP_NAME_L	L"VGM Player"
+
+// NCurses-like key constants
+#define KEY_DOWN		0x102		// cursor down
+#define KEY_UP			0x103		// cursor up
+#define KEY_LEFT		0x104		// cursor left
+#define KEY_RIGHT		0x105		// cursor right
+#define KEY_NPAGE		0x152		// next page (page down)
+#define KEY_PPAGE		0x153		// previouspage (page up)
+#define KEY_MASK		0xFFF
+#define KEY_CTRL		0x1000
+#define KEY_SHIFT		0x2000
+#define KEY_ALT			0x4000
 
 
 static AudioDriver adOut = {ADRVTYPE_OUT, -1, "", 0, 0, NULL};
@@ -149,6 +164,7 @@ UINT8 PlayerMain(void)
 		DATA_LOADER* dLoad;
 		PlayerBase* player;
 		
+		cls();
 		printf(APP_NAME);
 		printf("\n----------\n");
 		if (songList[curSong].playlistID != (size_t)-1)
@@ -167,6 +183,7 @@ UINT8 PlayerMain(void)
 				controlVal = +1;
 			curSong += controlVal;
 			_getch();
+			// TODO: evaluate pressed key + exit when ESC is pressed
 			continue;
 		}
 		
@@ -385,7 +402,6 @@ static void ShowSongInfo(PlayerBase* player)
 		const PLR_DEV_INFO& pdi = diList[curDev];
 		const char* chipName;
 		
-		//chipName = GetAccurateChipName(pdi.type, pdi.cParams & 0xFF);
 		chipName = SndEmu_GetDevName(pdi.type, 0x01, pdi.devCfg);
 		if (curDev + 1 < diList.size())
 		{
@@ -478,70 +494,12 @@ static UINT8 PlayFile(PlayerBase* player)
 			Sleep(50);
 		}
 		
-		if (_kbhit())
+		retVal = HandleKeyPress(player);
+		if (retVal)
 		{
-			int inkey = _getch();
-			int letter = toupper(inkey);
-			
-			if (letter == ' ' || letter == 'P')
-			{
-				playState ^= PLAYSTATE_PAUSE;
-				if (adOut.data != NULL)
-				{
-					if (playState & PLAYSTATE_PAUSE)
-						AudioDrv_Pause(adOut.data);
-					else
-						AudioDrv_Resume(adOut.data);
-				}
-			}
-			else if (letter == 'R')	// restart
-			{
-				OSMutex_Lock(renderMtx);
-				player->Reset();
-				fadeSmplStart = (UINT32)-1;
-				OSMutex_Unlock(renderMtx);
-			}
-			else if (letter >= '0' && letter <= '9')
-			{
-				UINT32 maxPos;
-				UINT8 pbPos10;
-				UINT32 destPos;
-				
-				OSMutex_Lock(renderMtx);
-				maxPos = player->GetTotalPlayTicks(maxLoops);
-				pbPos10 = letter - '0';
-				destPos = maxPos * pbPos10 / 10;
-				player->Seek(PLAYPOS_TICK, destPos);
-				if (player->GetCurPos(PLAYPOS_SAMPLE) < fadeSmplStart)
-					fadeSmplStart = (UINT32)-1;
-				OSMutex_Unlock(renderMtx);
-			}
-			else if (letter == 'B')	// previous file
-			{
-				if (curSong > 0)
-				{
-					playState |= PLAYSTATE_END;
-					controlVal = -1;
-				}
-			}
-			else if (letter == 'N')	// next file
-			{
-				if (curSong + 1 < songList.size())
-				{
-					playState |= PLAYSTATE_END;
-					controlVal = +1;
-				}
-			}
-			else if (inkey == 0x1B || letter == 'Q')	// quit
-			{
-				playState |= PLAYSTATE_END;
-				controlVal = +9;
-			}
-			else if (letter == 'F')	// fade out
-			{
-				fadeSmplStart = player->GetCurPos(PLAYPOS_SAMPLE);
-			}
 			needRefresh = true;
+			if (retVal >= 0x10)
+				break;
 		}
 	}
 #ifndef _WIN32
@@ -562,6 +520,221 @@ static UINT8 PlayFile(PlayerBase* player)
 	printf("\n");
 	
 	return 0x00;
+}
+
+#ifdef WIN32
+static int GetPressedKey(void)
+{
+	int keyCode = _getch();
+	switch(keyCode)
+	{
+	case 0xE0:	// Special Key #1
+		// Windows cursor key codes
+		// Shift + Cursor results in the same code as if Shift wasn't pressed
+		//	Key     None    Ctrl    Alt
+		//	Up      E0 48   E0 8D   00 98
+		//	Down    E0 50   E0 91   00 A0
+		//	Left    E0 4B   E0 73   00 9B
+		//	Right   E0 4D   E0 74   00 9D
+		keyCode = _getch();	// Get 2nd Key
+		switch(KeyCode)
+		{
+		case 0x48:
+			return KEY_UP;
+		case 0x49:
+			return KEY_PPAGE;
+		case 0x4B:
+			return KEY_LEFT;
+		case 0x4D:
+			return KEY_RIGHT;
+		case 0x50:
+			return KEY_DOWN;
+		case 0x51:
+			return KEY_NPAGE;
+		case 0x73:
+			return KEY_CTRL | KEY_LEFT;
+		case 0x74:
+			return KEY_CTRL | KEY_RIGHT;
+		case 0x8D:
+			return KEY_CTRL | KEY_UP;
+		case 0x91:
+			return KEY_CTRL | KEY_DOWN;
+		}
+		break;
+	case 0x00:	// Special Key #2
+		keyCode = _getch();	// Get 2nd Key
+		switch(KeyCode)
+		{
+		case 0x98:
+			return KEY_ALT | KEY_UP;
+		case 0x9B:
+			return KEY_ALT | KEY_LEFT;
+		case 0x9D:
+			return KEY_ALT | KEY_RIGHT;
+		case 0xA0:
+			return KEY_ALT | KEY_DOWN;
+		}
+		break;
+	}
+	return keyCode;
+}
+#else
+static int GetPressedKey(void)
+{
+	int keyCode = _getch();
+	if (keyCode != 0x1B)
+		return keyCode;
+	
+	int keyModifers = 0x00;
+	
+	// handle escape codes
+	keyCode = _getch();
+	if (keyCode == 0x1B || keyCode == 0x00)
+		return 0x1B;	// ESC Key pressed
+	switch(keyCode)
+	{
+	case 0x5B:
+		// cursor only:     1B 41..44
+		// Shift + cursor:  1B 31 3B 32 41..44
+		// Alt + cursor:    1B 31 3B 33 41..44
+		// Ctrl + cursor:   1B 31 3B 35 41..44
+		// page down/up:    1B 35/36 7E
+		keyCode = _getch();	// get 2nd Key
+		if (keyCode == 0x31)	// Ctrl or Alt key
+		{
+			keyCode = _getch();
+			if (keyCode == 0x3B)
+			{
+				keyCode = _getch();
+				if ((keyCode - 0x31) & 0x01)
+					keyModifers |= KEY_SHIFT;
+				if ((keyCode - 0x31) & 0x02)
+					keyModifers |= KEY_ALT;
+				if ((keyCode - 0x31) & 0x04)
+					keyModifers |= KEY_CTRL;
+				keyCode = _getch();
+			}
+		}
+		switch(keyCode)
+		{
+		case 0x35:
+			_getch();	// skip 7E key code
+			return KEY_PPAGE;
+		case 0x36:
+			_getch();	// skip 7E key code
+			return KEY_NPAGE;
+		case 0x41:
+			return keyModifers | KEY_UP;
+		case 0x42:
+			return keyModifers | KEY_DOWN;
+		case 0x43:
+			return keyModifers | KEY_RIGHT;
+		case 0x44:
+			return keyModifers | KEY_LEFT;
+		}
+	}
+	return keyCode;
+}
+#endif
+
+static UINT8 HandleKeyPress(PlayerBase* player)
+{
+	if (! _kbhit())
+		return 0;
+	
+	int keyCode = GetPressedKey();
+	if (keyCode >= 'a' && keyCode <= 'z')
+		keyCode = toupper(keyCode);
+	switch(keyCode)
+	{
+	case 0x1B:	// ESC
+	case 'Q':	// quit
+		playState |= PLAYSTATE_END;
+		controlVal = +9;
+		return 0x10;
+	case ' ':
+	case 'P':	// pause
+		playState ^= PLAYSTATE_PAUSE;
+		if (adOut.data != NULL)
+		{
+			if (playState & PLAYSTATE_PAUSE)
+				AudioDrv_Pause(adOut.data);
+			else
+				AudioDrv_Resume(adOut.data);
+		}
+		break;
+	case 'F':	// fade out
+		fadeSmplStart = player->GetCurPos(PLAYPOS_SAMPLE);
+		break;
+	case 'R':	// restart
+		OSMutex_Lock(renderMtx);
+		player->Reset();
+		fadeSmplStart = (UINT32)-1;
+		OSMutex_Unlock(renderMtx);
+		break;
+	case KEY_LEFT:
+	case KEY_RIGHT:
+	case KEY_CTRL | KEY_LEFT:
+	case KEY_CTRL | KEY_RIGHT:
+		{
+			UINT32 destPos;
+			INT32 seekSmpls;
+			
+			INT32 secs = (keyCode & KEY_CTRL) ? 60 : 5;	// 5s [not ctrl] or 60s [ctrl]
+			if ((keyCode & KEY_MASK) == KEY_LEFT)
+				secs *= -1;	// seek back
+			
+			OSMutex_Lock(renderMtx);
+			destPos = player->GetCurPos(PLAYPOS_SAMPLE);
+			seekSmpls = player->GetSampleRate() * secs;
+			if (seekSmpls < 0 && (UINT32)-seekSmpls > destPos)
+				destPos = 0;
+			else
+				destPos += seekSmpls;
+			player->Seek(PLAYPOS_SAMPLE, destPos);
+			if (player->GetCurPos(PLAYPOS_SAMPLE) < fadeSmplStart)
+				fadeSmplStart = (UINT32)-1;
+			OSMutex_Unlock(renderMtx);
+		}
+		break;
+	case 'B':	// previous file (back)
+	case KEY_PPAGE:
+		if (curSong > 0)
+		{
+			playState |= PLAYSTATE_END;
+			controlVal = -1;
+			return 0x10;
+		}
+		break;
+	case 'N':	// next file
+	case KEY_NPAGE:
+		if (curSong + 1 < songList.size())
+		{
+			playState |= PLAYSTATE_END;
+			controlVal = +1;
+			return 0x10;
+		}
+		break;
+	default:
+		if (keyCode >= '0' && keyCode <= '9')
+		{
+			UINT32 maxPos;
+			UINT8 pbPos10;
+			UINT32 destPos;
+			
+			OSMutex_Lock(renderMtx);
+			maxPos = player->GetTotalPlayTicks(maxLoops);
+			pbPos10 = keyCode - '0';
+			destPos = maxPos * pbPos10 / 10;
+			player->Seek(PLAYPOS_TICK, destPos);
+			if (player->GetCurPos(PLAYPOS_SAMPLE) < fadeSmplStart)
+				fadeSmplStart = (UINT32)-1;
+			OSMutex_Unlock(renderMtx);
+		}
+		break;
+	}
+	
+	return 0x01;
 }
 
 static std::string FCC2Str(UINT32 fcc)
@@ -779,19 +952,19 @@ static UINT8 FilePlayCallback(PlayerBase* player, void* userParam, UINT8 evtType
 				}
 				else
 				{
-					printf("Loop End.\n");
+					//printf("Loop End.\n");
 					playState |= PLAYSTATE_END;
 					return 0x01;
 				}
 			}
 			if (player->GetState() & PLAYSTATE_SEEK)
 				break;
-			printf("Loop %u.\n", 1 + *curLoop);
+			//printf("Loop %u.\n", 1 + *curLoop);
 		}
 		break;
 	case PLREVT_END:
 		playState |= PLAYSTATE_END;
-		printf("Song End.\n");
+		//printf("Song End.\n");
 		break;
 	}
 	return 0x00;
@@ -978,6 +1151,41 @@ static UINT8 StopAudioDevice(void)
 }
 
 
+#ifdef WIN32
+static void cls(void)
+{
+	// CLS-Function from the MSDN Help
+	HANDLE hConsole;
+	COORD coordScreen = {0, 0};
+	BOOL bSuccess;
+	DWORD cCharsWritten;
+	CONSOLE_SCREEN_BUFFER_INFO csbi;
+	DWORD dwConSize;
+	
+	hConsole = GetStdHandle(STD_OUTPUT_HANDLE);
+	
+	// get the number of character cells in the current buffer
+	bSuccess = GetConsoleScreenBufferInfo(hConsole, &csbi);
+	
+	// fill the entire screen with blanks
+	dwConSize = csbi.dwSize.X * csbi.dwSize.Y;
+	bSuccess = FillConsoleOutputCharacter(hConsole, (TCHAR)' ', dwConSize, coordScreen,
+											&cCharsWritten);
+	
+	// get the current text attribute
+	//bSuccess = GetConsoleScreenBufferInfo(hConsole, &csbi);
+	
+	// now set the buffer's attributes accordingly
+	//bSuccess = FillConsoleOutputAttribute(hConsole, csbi.wAttributes, dwConSize, coordScreen,
+	//										&cCharsWritten);
+	
+	// put the cursor at (0, 0)
+	bSuccess = SetConsoleCursorPosition(hConsole, coordScreen);
+	
+	return;
+}
+#endif
+
 #ifndef _WIN32
 static struct termios oldterm;
 static UINT8 termmode = 0xFF;
@@ -1022,5 +1230,12 @@ static int _kbhit(void)
 	select(STDIN_FILENO + 1, &rdfs, NULL, NULL, &tv);
 	
 	return FD_ISSET(STDIN_FILENO, &rdfs);;
+}
+
+static void cls(void)
+{
+	system("clear");
+	
+	return;
 }
 #endif
