@@ -1,11 +1,21 @@
-project(vgmplay LANGUAGES C CXX)
+#### VGMPlay (libvgm-based) ####
 cmake_minimum_required(VERSION 3.1)
+if(POLICY CMP0042)
+	cmake_policy(SET CMP0042 NEW)
+endif()
+if(POLICY CMP0048)
+	cmake_policy(SET CMP0048 NEW)
+endif()
+project(vgmplay VERSION 0.5 LANGUAGES C CXX)
 
 #set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${PROJECT_BINARY_DIR}/bin)
 #set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${PROJECT_BINARY_DIR}/bin)
 #set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${PROJECT_BINARY_DIR}/bin)
 
-add_subdirectory(../libvgm libvgm)
+find_package(ZLIB REQUIRED)
+find_package(Threads REQUIRED)
+find_package(Iconv QUIET)
+find_package(libvgm REQUIRED)
 
 if(MSVC)
 	set(CMAKE_DEBUG_POSTFIX "d")
@@ -100,10 +110,11 @@ set(PLAYER_FILES
 	m3uargparse.cpp
 	main.cpp
 	player.cpp
+	playctrl.cpp
 )
 
 add_executable(${PROJECT_NAME} ${HEADERS} ${SOURCES} ${PLAYER_HEADERS} ${PLAYER_FILES})
 target_include_directories(${PROJECT_NAME} PRIVATE ${PROJECT_SOURCE_DIR} ${INCLUDES})
-target_link_libraries(${PROJECT_NAME} PRIVATE ${LIBRARIES} vgm-audio vgm-player vgm-utils)
+target_link_libraries(${PROJECT_NAME} PRIVATE ${LIBRARIES} libvgm::vgm-utils libvgm::vgm-audio libvgm::vgm-emu libvgm::vgm-player)
 install(TARGETS ${PROJECT_NAME} RUNTIME DESTINATION "bin")
 #add_sanitizers(${PROJECT_NAME})
