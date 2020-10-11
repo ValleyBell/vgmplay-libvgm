@@ -80,8 +80,8 @@ static UINT8 StopAudioDevice(void);
 static void changemode(UINT8 noEcho);
 static int _kbhit(void);
 #define	_getch	getchar
-static void cls(void);
 #endif
+static void cls(void);
 
 
 #define APP_NAME	"VGM Player"
@@ -103,7 +103,7 @@ static void cls(void);
 static AudioDriver adOut = {ADRVTYPE_OUT, -1, "", 0, 0, NULL};
 static AudioDriver adLog = {ADRVTYPE_DISK, -1, "", 0, 0, NULL};
 
-static std::vector<uint8_t> audioBuf;
+static std::vector<UINT8> audioBuf;
 static OS_MUTEX* renderMtx;	// render thread mutex
 
 static UINT32 sampleRate = 44100;
@@ -526,7 +526,7 @@ static int GetPressedKey(void)
 		//	Left    E0 4B   E0 73   00 9B
 		//	Right   E0 4D   E0 74   00 9D
 		keyCode = _getch();	// Get 2nd Key
-		switch(KeyCode)
+		switch(keyCode)
 		{
 		case 0x48:
 			return KEY_UP;
@@ -552,7 +552,7 @@ static int GetPressedKey(void)
 		break;
 	case 0x00:	// Special Key #2
 		keyCode = _getch();	// Get 2nd Key
-		switch(KeyCode)
+		switch(keyCode)
 		{
 		case 0x98:
 			return KEY_ALT | KEY_UP;

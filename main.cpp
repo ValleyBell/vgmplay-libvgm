@@ -46,6 +46,10 @@
 extern UINT8 PlayerMain(void);
 
 
+#define VGMPLAY_VER_STR	"0.5.0"
+#define VGM_VER_STR		"1.71b"
+
+
 struct OptionItem
 {
 	unsigned char flags;    // 0 - no parameter, 1 - has 1 parameter
@@ -62,10 +66,13 @@ static void InitAppSearchPaths(const char* argv_0);
 static int IniValHandler(void* user, const char* section, const char* name, const char* value);
 static UINT8 LoadConfig(const std::string& iniPath, Configuration& cfg);
 static std::string GenerateOptData(const OptionList& optList, std::vector<struct option>* longOpts);
-static int ParseArguments(int argc, char* argv[], Configuration& argCfg);
+static void PrintVersion(void);
+static void PrintArgumentHelp(const OptionList& optList);
+static int ParseArguments(int argc, char* argv[], const OptionList& optList, Configuration& argCfg);
 
 
-static const OptionList optionList =
+// can't initialize an std::vector directly in C++98
+static const OptionItem OPT_LIST_ARR[] =
 {
 	{0, 'h', "help",            NULL,     "show this help screen"},
 	{0, 'v', "version",         NULL,     "show version"},
@@ -73,6 +80,7 @@ static const OptionList optionList =
 	{1, 'd', "output-device",   "id",     "output device ID"},
 	{1, 'c', "config",          "option", "set configuration option, format: section.key=Data"},
 };
+static const size_t OPT_LIST_SIZE = sizeof(OPT_LIST_ARR) / sizeof(OPT_LIST_ARR[0]);
 
 
 static std::vector<std::string> appSearchPaths;
@@ -90,6 +98,7 @@ int wmain(int argc, wchar_t* wargv[])
 int main(int argc, char* argv[])
 {
 #endif
+	OptionList optionList(OPT_LIST_ARR, OPT_LIST_ARR + OPT_LIST_SIZE);
 	int argbase;
 	UINT8 retVal;
 	//int resVal;
@@ -97,20 +106,6 @@ int main(int argc, char* argv[])
 	
 	setlocale(LC_ALL, "");	// enable UTF-8 support on Linux
 	setlocale(LC_NUMERIC, "C");	// enforce decimal dot
-	
-	printf("VGM Player\n");
-	printf("----------\n");
-	if (argc < 2)
-	{
-#ifdef USE_WMAIN
-		printf("Usage: %ls [options] file1.vgm file2.vgz ...\n", wargv[0]);
-#else
-		printf("Usage: %s [options] file1.vgm file2.vgz ...\n", argv[0]);
-#endif
-		//printf("Options:\n");
-		//printf("    none currently\n");
-		return 0;
-	}
 	
 #ifdef USE_WMAIN
 	argv = (char**)malloc(argc * sizeof(char*));
@@ -123,15 +118,20 @@ int main(int argc, char* argv[])
 	// Note: I'm not freeing argv anywhere. I'll let Windows take care about it this one time.
 #endif
 	
-	argbase = ParseArguments(argc, argv, argCfg);
+	printf("VGM Player\n");
+	printf("----------\n");
+	
+	argbase = ParseArguments(argc, argv, optionList, argCfg);
 	if (argbase == 0)
 		return 0;
 	else if (argbase < 0)
 		return 1;
 	if (argc < argbase + 1)
 	{
-		printf("Not enough arguments.\n");
-		return 1;
+		PrintVersion();
+		printf("Usage: %s [options] file1.vgm [file2.vgz] [...]\n", argv[0]);
+		PrintArgumentHelp(optionList);
+		return 0;
 	}
 	
 	InitAppSearchPaths(argv[0]);
@@ -140,14 +140,14 @@ int main(int argc, char* argv[])
 	
 	std::string cfgFilePath = FindFile_List(cfgFileNames, appSearchPaths);
 	if (cfgFilePath.empty())
-	{
-		printf("%s not found!\n", cfgFileNames[cfgFileNames.size() - 1].c_str());
-		return 1;
-	}
+		printf("%s not found - falling back to defaults.\n", cfgFileNames[cfgFileNames.size() - 1].c_str());
 	
 	// TODO: load default configuration here?
-	LoadConfig(cfgFilePath, playerCfg);	// load INI file
-	playerCfg += argCfg;	// override INI settings with commandline options
+	if (! cfgFilePath.empty())
+	{
+		LoadConfig(cfgFilePath, playerCfg);	// load INI file
+		playerCfg += argCfg;	// override INI settings with commandline options
+	}
 #if 0	// print current configuration
 	{
 		printf("Config File:\n");
@@ -219,7 +219,7 @@ static void InitAppSearchPaths(const char* argv_0)
 {
 	appSearchPaths.clear();
 	
-#ifndef WIN32
+#ifndef _WIN32
 	// 1. [Unix only] global share directory
 	appSearchPaths.push_back(SHARE_PREFIX "/share/vgmplay/");
 #endif
@@ -242,7 +242,7 @@ static void InitAppSearchPaths(const char* argv_0)
 	
 	// 4. home/config directory
 	std::string cfgDir;
-#ifdef WIN32
+#ifdef _WIN32
 	cfgDir = getenv("USERPROFILE");
 	cfgDir += "/.vgmplay/";
 #else
@@ -339,22 +339,22 @@ static std::string GenerateOptData(const OptionList& optList, std::vector<struct
 
 static void PrintVersion(void)
 {
-	printf("VGMPlay %s, supports VGM %s\n", "0.5.0", "1.71b");
+	printf("VGMPlay %s, supports VGM %s\n", VGMPLAY_VER_STR, VGM_VER_STR);
 	return;
 }
 
-static void PrintArgumentHelp(void)
+static void PrintArgumentHelp(const OptionList& optList)
 {
 	std::vector<std::string> cmdCol;	// command column
 	const int indent = 4;
 	size_t maxCmdLen;
 	size_t curOpt;
 	
-	cmdCol.resize(optionList.size());
+	cmdCol.resize(optList.size());
 	maxCmdLen = 0;
-	for (curOpt = 0; curOpt < optionList.size(); curOpt ++)
+	for (curOpt = 0; curOpt < optList.size(); curOpt ++)
 	{
-		const OptionItem& oItm = optionList[curOpt];
+		const OptionItem& oItm = optList[curOpt];
 		std::string& cmdStr = cmdCol[curOpt];
 		
 		cmdStr = std::string("-") + oItm.shortOpt + ", --" + oItm.longOpt;
@@ -367,9 +367,9 @@ static void PrintArgumentHelp(void)
 	maxCmdLen += 2;	// add 2 characters of padding
 	maxCmdLen = (maxCmdLen + 3) & ~3;	// round up to 4
 	
-	for (curOpt = 0; curOpt < optionList.size(); curOpt ++)
+	for (curOpt = 0; curOpt < optList.size(); curOpt ++)
 	{
-		const auto& oItm = optionList[curOpt];
+		const auto& oItm = optList[curOpt];
 		int padding = static_cast<int>(maxCmdLen - cmdCol[curOpt].length());
 		printf("%*s%s%*s%s\n", indent, "", cmdCol[curOpt].c_str(), padding, "  ", oItm.helpText);
 	}
@@ -377,12 +377,12 @@ static void PrintArgumentHelp(void)
 	return;
 }
 
-static int ParseArguments(int argc, char* argv[], Configuration& argCfg)
+static int ParseArguments(int argc, char* argv[], const OptionList& optList, Configuration& argCfg)
 {
 	std::string sOpts;
 	std::vector<struct option> lOpts;
 	
-	sOpts = GenerateOptData(optionList, &lOpts);
+	sOpts = GenerateOptData(optList, &lOpts);
 	optind = 1;
 	while(true)
 	{
@@ -400,7 +400,7 @@ static int ParseArguments(int argc, char* argv[], Configuration& argCfg)
 		case 'h':	// help
 			PrintVersion();
 			printf("Usage: %s [options] file1.vgm [file2.vgz] [...]\n", argv[0]);
-			PrintArgumentHelp();
+			PrintArgumentHelp(optList);
 			return 0;
 		case 'w':	// dump-wav
 			argCfg.AddEntry("General", "LogSound", "1");
