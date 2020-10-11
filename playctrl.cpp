@@ -390,20 +390,20 @@ static void ShowSongInfo(void)
 	{
 		const PLR_DEV_INFO& pdi = diList[curDev];
 		const char* chipName;
+		unsigned int drvCnt = 1;
 		
 		chipName = SndEmu_GetDevName(pdi.type, 0x01, pdi.devCfg);
-		if (curDev + 1 < diList.size())
+		for (drvCnt = 1; curDev + 1 < diList.size(); curDev ++, drvCnt ++)
 		{
 			const PLR_DEV_INFO& pdi1 = diList[curDev + 1];
-			if (pdi.type == pdi1.type)
-			{
-				if (! (pdi.core != pdi1.core && showCores))
-				{
-					printf("2x");
-					curDev ++;
-				}
-			}
+			const char* chipName1 = SndEmu_GetDevName(pdi1.type, 0x01, pdi1.devCfg);
+			bool sameChip = (chipName == chipName1);	// we assume static pointers to chip names here
+			sameChip &= (! (pdi.core != pdi1.core && showCores));
+			if (! sameChip)
+				break;
 		}
+		if (drvCnt > 1)
+			printf("%ux", drvCnt);
 		if (showCores)
 			printf("%s (%s), ", chipName, FCC2Str(pdi.core).c_str());
 		else
