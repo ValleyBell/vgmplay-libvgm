@@ -13,6 +13,7 @@ public:
 	~PlayerWrapper();
 	void RegisterPlayerEngine(PlayerBase* player);
 	void UnregisterAllPlayers(void);
+	const std::vector<PlayerBase*>& GetRegisteredPlayers(void) const;
 	
 	void PrepareRendering(const AUDIO_OPTS* opts, UINT32 bufSmpls);
 	UINT32 GetSampleRate(void) const;

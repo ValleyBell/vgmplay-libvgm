@@ -111,6 +111,7 @@ set(PLAYER_FILES
 	main.cpp
 	player.cpp
 	playctrl.cpp
+	playcfg.cpp
 )
 
 add_executable(${PROJECT_NAME} ${HEADERS} ${SOURCES} ${PLAYER_HEADERS} ${PLAYER_FILES})

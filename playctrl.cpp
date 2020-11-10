@@ -1,4 +1,3 @@
-#include <cstdarg>
 #ifdef _WIN32
 //#define _WIN32_WINNT	0x500	// for GetConsoleWindow()
 #include <windows.h>
@@ -36,15 +35,14 @@ extern "C" int __cdecl _kbhit(void);
 #include <player/vgmplayer.hpp>
 #include <audio/AudioStream.h>
 #include <audio/AudioStream_SpcDrvFuns.h>
-#include <emu/Resampler.h>
 #include <emu/SoundDevs.h>
 #include <emu/SoundEmu.h>	// for SndEmu_GetDevName()
 #include <utils/OSMutex.h>
 
-#include "stdtype.h"
 #include "utils.hpp"
 #include "config.hpp"
 #include "m3uargparse.hpp"
+#include "playcfg.hpp"
 #include "player.hpp"
 
 
@@ -66,7 +64,7 @@ static void ShowSongInfo(void);
 static UINT8 PlayFile(void);
 static int GetPressedKey(void);
 static UINT8 HandleKeyPress(void);
-static std::string FCC2Str(UINT32 fcc);
+static inline std::string FCC2Str(UINT32 fcc);
 static std::string GetTimeStr(double seconds, INT8 showHours = 0);
 static UINT32 FillBuffer(void* drvStruct, void* userParam, UINT32 bufSize, void* Data);
 static UINT8 FilePlayCallback(PlayerBase* player, void* userParam, UINT8 evtType, void* evtParam);
@@ -106,8 +104,6 @@ static AudioDriver adLog = {ADRVTYPE_DISK, -1, "", 0, 0, NULL};
 static std::vector<UINT8> audioBuf;
 static OS_MUTEX* renderMtx;	// render thread mutex
 
-static UINT32 sampleRate = 44100;
-static UINT32 maxLoops = 2;
 static bool manualRenderLoop = false;
 static volatile UINT8 playState;
 
@@ -125,11 +121,15 @@ extern std::vector<std::string> plList;
 static int controlVal;
 static size_t curSong;
 
+static GeneralOptions genOpts;
+static ChipOptions chipOpts[0x100];
 static PlayerWrapper myPlayer;
 
 UINT8 PlayerMain(void)
 {
 	UINT8 retVal;
+	
+	ParseConfiguration(genOpts, 0x100, chipOpts, playerCfg);
 	
 	adOut.dTypeID = AudioOutDrv;
 	retVal = InitAudioSystem();
@@ -149,6 +149,14 @@ UINT8 PlayerMain(void)
 	myPlayer.RegisterPlayerEngine(new S98Player);
 	myPlayer.RegisterPlayerEngine(new DROPlayer);
 	myPlayer.SetCallback(&FilePlayCallback, NULL);
+	ApplyCfg_General(myPlayer, genOpts);
+	for (size_t curChp = 0; curChp < 0x100; curChp ++)
+	{
+		const ChipOptions& cOpt = chipOpts[curChp];
+		if (cOpt.chipType == 0xFF)
+			continue;
+		ApplyCfg_Chip(myPlayer, genOpts, cOpt);
+	}
 	
 	//resVal = 0;
 	controlVal = +1;	// default: next song
@@ -157,13 +165,16 @@ UINT8 PlayerMain(void)
 		DATA_LOADER* dLoad;
 		PlayerBase* player;
 		
-		cls();
-		printf(APP_NAME);
-		printf("\n----------\n");
-		if (songList[curSong].playlistID != (size_t)-1)
+		if (songList.size() > 1)
 		{
-			printf("\nPlaylist File:  %s\n", plList[songList[curSong].playlistID].c_str());
-			printf("Playlist Entry: %u / %u\n", 1 + (unsigned)curSong, (unsigned)songList.size());
+			cls();
+			printf(APP_NAME);
+			printf("\n----------\n");
+			if (songList[curSong].playlistID != (size_t)-1)
+			{
+				printf("\nPlaylist File:  %s\n", plList[songList[curSong].playlistID].c_str());
+				printf("Playlist Entry: %u / %u\n", 1 + (unsigned)curSong, (unsigned)songList.size());
+			}
 		}
 		printf("File Name:      %s\n", songList[curSong].fileName.c_str());
 		fflush(stdout);
@@ -179,6 +190,11 @@ UINT8 PlayerMain(void)
 			// TODO: evaluate pressed key + exit when ESC is pressed
 			continue;
 		}
+		
+		if (curSong + 1 == songList.size())
+			myPlayer.SetFadeTime(genOpts.fadeTime_single * myPlayer.GetSampleRate() / 1000);
+		else
+			myPlayer.SetFadeTime(genOpts.fadeTime_plist * myPlayer.GetSampleRate() / 1000);
 		
 		// call "start" before showing song info, so that we can get the sound cores
 		myPlayer.Start();
@@ -419,7 +435,7 @@ static UINT8 PlayFile(void)
 	UINT8 retVal;
 	bool needRefresh;
 	
-	myPlayer.SetFadeTime(myPlayer.GetSampleRate() * 4);
+	//myPlayer.SetFadeTime(myPlayer.GetSampleRate() * 4);
 	
 	if (showFileInfo)
 	{
@@ -709,7 +725,7 @@ static UINT8 HandleKeyPress(void)
 			UINT32 destPos;
 			
 			OSMutex_Lock(renderMtx);
-			maxPos = myPlayer.GetPlayer()->GetTotalPlayTicks(maxLoops);
+			maxPos = myPlayer.GetPlayer()->GetTotalPlayTicks(genOpts.maxLoops);
 			pbPos10 = keyCode - '0';
 			destPos = maxPos * pbPos10 / 10;
 			myPlayer.Seek(PLAYPOS_TICK, destPos);
@@ -721,7 +737,7 @@ static UINT8 HandleKeyPress(void)
 	return 0x01;
 }
 
-static std::string FCC2Str(UINT32 fcc)
+static inline std::string FCC2Str(UINT32 fcc)
 {
 	std::string result(4, '\0');
 	result[0] = (char)((fcc >> 24) & 0xFF);
@@ -764,21 +780,6 @@ static std::string GetTimeStr(double seconds, INT8 showHours)
 	
 	return std::string(timeStr);
 }
-
-#if 1
-#define VOLCALC64
-#define VOL_BITS	16	// use .X fixed point for working volume
-#else
-#define VOL_BITS	8	// use .X fixed point for working volume
-#endif
-#define VOL_SHIFT	(16 - VOL_BITS)	// shift for master volume -> working volume
-
-// Pre- and post-shifts are used to make the calculations as accurate as possible
-// without causing the sample data (likely 24 bits) to overflow while applying the volume gain.
-// Smaller values for VOL_PRESH are more accurate, but have a higher risk of overflows during calculations.
-// (24 + VOL_POSTSH) must NOT be larger than 31
-#define VOL_PRESH	4	// sample data pre-shift
-#define VOL_POSTSH	(VOL_BITS - VOL_PRESH)	// post-shift after volume multiplication
 
 static UINT32 FillBuffer(void* drvStruct, void* userParam, UINT32 bufSize, void* data)
 {
@@ -961,7 +962,7 @@ static UINT8 StartAudioDevice(void)
 		opts = AudioDrv_GetOptions(adOut.data);
 	if (opts == NULL)
 		return 0xFF;
-	opts->sampleRate = sampleRate;
+	opts->sampleRate = genOpts.smplRate;
 	opts->numChannels = 2;
 	opts->numBitsPerSmpl = 16;
 	smplSize = opts->numChannels * opts->numBitsPerSmpl / 8;

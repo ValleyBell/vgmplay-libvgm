@@ -98,7 +98,7 @@ int wmain(int argc, wchar_t* wargv[])
 int main(int argc, char* argv[])
 {
 #endif
-	OptionList optionList(OPT_LIST_ARR, OPT_LIST_ARR + OPT_LIST_SIZE);
+	const OptionList optionList(OPT_LIST_ARR, OPT_LIST_ARR + OPT_LIST_SIZE);
 	int argbase;
 	UINT8 retVal;
 	//int resVal;

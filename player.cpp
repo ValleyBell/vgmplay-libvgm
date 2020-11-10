@@ -40,6 +40,11 @@ void PlayerWrapper::UnregisterAllPlayers(void)
 	return;
 }
 
+const std::vector<PlayerBase*>& PlayerWrapper::GetRegisteredPlayers(void) const
+{
+	return _avbPlrs;
+}
+
 void PlayerWrapper::PrepareRendering(const AUDIO_OPTS* opts, UINT32 bufSmpls)
 {
 	_outSmplChns = opts->numChannels;
