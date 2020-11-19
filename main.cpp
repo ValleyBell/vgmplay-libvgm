@@ -315,6 +315,7 @@ static std::string ReadLineAsUTF8(void)
 #ifdef _WIN32
 	// Using GetConsoleCP() is important here, as playing with the console font resets
 	// the Console Codepage to OEM.
+	if (! fileName.empty())
 	{
 		std::wstring fileNameW;
 		UINT conCP = GetConsoleCP();

@@ -25,5 +25,6 @@ char* utf8strseek(const char* str, size_t numChars);
 int count_digits(int value);
 void RemoveControlChars(std::string& str);
 void RemoveQuotationMarks(std::string& str, char quotMark);
+void u8printf(const char* format, ...);
 
 #endif	// __UTILS_HPP__

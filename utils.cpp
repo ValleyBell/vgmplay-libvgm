@@ -3,6 +3,9 @@
 #include <string>
 #include <stdio.h>
 #include <vector>
+#include <stdarg.h>
+
+#include <Windows.h>	// for WriteConsoleW etc.
 
 #include "utils.hpp"
 
@@ -23,6 +26,7 @@ static bool utf8_advance(const char** str);
 //char* utf8strseek(const char* str, size_t numChars);
 //void RemoveControlChars(std::string& str);
 //void RemoveQuotationMarks(std::string& str, char quotMark);
+//void u8printf(const char* format, ...);
 
 
 static const char* GetLastDirSeparator(const char* filePath)
@@ -275,3 +279,60 @@ void RemoveQuotationMarks(std::string& str, char quotMark)
 	
 	return;
 }
+
+// print UTF-8 string with correct codepage on Windows
+#ifndef _WIN32
+void u8printf(const char* format, ...)
+{
+	va_list arg_list;
+
+	va_start(arg_list, format);
+	vprintf(format, arg_list);
+	va_end(arg_list);
+
+	return;
+}
+#else
+void u8printf(const char* format, ...)
+{
+	va_list arg_list;
+	int retVal;
+	BOOL retValB;
+	int bufSize;
+	std::string printBuf;
+	std::wstring printWBuf;
+	DWORD dummyDW;
+	
+	do
+	{
+		printBuf.resize(printBuf.size() + 0x100);
+		
+		// Note: On Linux every vprintf call needs its own set of va_start/va_end commands.
+		//       Under Windows (with VC6) one only one block for all calls works, too.
+		va_start(arg_list, format);
+		retVal = _vsnprintf(&printBuf[0], printBuf.size(), format, arg_list);
+		va_end(arg_list);
+	} while(retVal == -1 && printBuf.size() < 0x1000);
+	if (retVal >= 0)
+		printBuf.resize(retVal);	// resize to "number of characters written"
+	
+	bufSize = MultiByteToWideChar(CP_UTF8, 0, printBuf.c_str(), printBuf.size(), NULL, 0);
+	printWBuf.resize(bufSize);
+	MultiByteToWideChar(CP_UTF8, 0, printBuf.c_str(), printBuf.size(), &printWBuf[0], bufSize);
+	
+	// This is the only way to print Unicode stuff to the Windows console.
+	// No, wprintf doesn't work.
+	retValB = WriteConsoleW(GetStdHandle(STD_OUTPUT_HANDLE), printWBuf.c_str(), printWBuf.length(), &dummyDW, NULL);
+	if (! retValB)	// call failed (e.g. with ERROR_CALL_NOT_IMPLEMENTED on Win95)
+	{
+		// fallback to printf with OEM codepage
+		UINT CPMode = GetConsoleOutputCP();
+		bufSize = WideCharToMultiByte(CPMode, 0x00, printWBuf.c_str(), printWBuf.length(), NULL, 0, NULL, NULL);
+		printBuf.resize(bufSize);
+		WideCharToMultiByte(CPMode, 0x00, printWBuf.c_str(), printWBuf.length(), &printBuf[0], bufSize, NULL, NULL);
+		
+		puts(printBuf.c_str());
+	}
+	return;
+}
+#endif	// defined(_WIN32)

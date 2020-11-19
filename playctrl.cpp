@@ -368,23 +368,23 @@ static void ShowSongInfo(const std::string& fileName)
 	if (genOpts.setTermTitle)
 		ShowConsoleTitle(fileName, GetTagForDisp(tags, "TITLE"), GetTagForDisp(tags, "GAME"));
 	
-	printf("Track Title:    %s\n", GetTagForDisp(tags, "TITLE"));
-	printf("Game Name:      %s\n", GetTagForDisp(tags, "GAME"));
-	printf("System:         %s\n", GetTagForDisp(tags, "SYSTEM"));
-	printf("Composer:       %s\n", GetTagForDisp(tags, "ARTIST"));
+	u8printf("Track Title:    %s\n", GetTagForDisp(tags, "TITLE"));
+	u8printf("Game Name:      %s\n", GetTagForDisp(tags, "GAME"));
+	u8printf("System:         %s\n", GetTagForDisp(tags, "SYSTEM"));
+	u8printf("Composer:       %s\n", GetTagForDisp(tags, "ARTIST"));
 	if (player->GetPlayerType() == FCC_S98)
 	{
 		S98Player* s98play = dynamic_cast<S98Player*>(player);
 		const S98_HEADER* s98hdr = s98play->GetFileHeader();
 		
-		printf("Release:        %-12sTick Rate: %u/%u\n", GetTagForDisp(tags, "DATE"),
+		u8printf("Release:        %-11s Tick Rate: %u/%u\n", GetTagForDisp(tags, "DATE"),
 			s98hdr->tickMult, s98hdr->tickDiv);
 	}
 	else
 	{
-		printf("Release:        %s\n", GetTagForDisp(tags, "DATE"));
+		u8printf("Release:        %s\n", GetTagForDisp(tags, "DATE"));
 	}
-	printf("Format:         %-12s", verStr);
+	printf("Format:         %-11s ", verStr);
 	printf("Gain:%5.2f    ", pow(2.0, volGain / (double)0x100));
 	if (player->GetPlayerType() == FCC_DRO)
 	{
@@ -410,8 +410,8 @@ static void ShowSongInfo(const std::string& fileName)
 		else
 			printf("Loop: No\n");
 	}
-	printf("VGM by:         %s\n", GetTagForDisp(tags, "ENCODED_BY"));
-	printf("Notes:          %s\n", GetTagForDisp(tags, "COMMENT"));
+	u8printf("VGM by:         %s\n", GetTagForDisp(tags, "ENCODED_BY"));
+	u8printf("Notes:          %s\n", GetTagForDisp(tags, "COMMENT"));
 	printf("\n");
 	
 	std::vector<PLR_DEV_INFO> diList;
@@ -460,7 +460,11 @@ static void ShowConsoleTitle(const std::string& fileName, const std::string& tit
 	titleStr = titleStr + " - " + APP_NAME;
 	
 #ifdef WIN32
-	SetConsoleTitleA(titleStr.c_str());			// Set Windows Console Title
+	int bufSize = MultiByteToWideChar(CP_UTF8, 0, titleStr.c_str(), titleStr.size(), NULL, 0);
+	std::wstring titleWStr(bufSize, '\0');
+	MultiByteToWideChar(CP_UTF8, 0, titleStr.c_str(), titleStr.size(), &titleWStr[0], bufSize);
+	
+	SetConsoleTitleW(titleWStr.c_str());		// Set Windows Console Title
 #else
 	printf("\x1B]0;%ls\x07", titleStr.c_str());	// Set xterm/rxvt Terminal Title
 #endif
