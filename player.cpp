@@ -409,16 +409,10 @@ UINT8 PlayerWrapper::PlayCallback(PlayerBase* player, UINT8 evtType, void* evtPa
 			UINT32* curLoop = (UINT32*)evtParam;
 			if (_loopCount > 0 && *curLoop >= _loopCount)
 			{
-				if (_fadeSmpls > 0)
-				{
-					if (_fadeSmplStart == (UINT32)-1)
-						_fadeSmplStart = player->GetCurPos(PLAYPOS_SAMPLE);
-				}
-				else
-				{
-					_myPlayState |= PLAYSTATE_END;
-					return 0x01;
-				}
+				if (_fadeSmpls == 0)
+					return 0x01;	// send "stop" signal to player engine
+				if (_fadeSmplStart == (UINT32)-1)
+					_fadeSmplStart = player->GetCurPos(PLAYPOS_SAMPLE);
 			}
 		}
 		break;
