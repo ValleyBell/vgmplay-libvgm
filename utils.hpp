@@ -22,5 +22,6 @@ std::string Vector2String(const std::vector<unsigned char>& data, size_t startPo
 std::string Vector2String(const unsigned char* data, size_t startPos, size_t endPos);
 size_t utf8strlen(const char* str);
 char* utf8strseek(const char* str, size_t numChars);
+int count_digits(int value);
 
 #endif	// __UTILS_HPP__

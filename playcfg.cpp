@@ -180,9 +180,9 @@ static void ParseCfg_General(GeneralOptions& opts, const CfgSection& cfg)
 	{
 		std::string hsStr = Cfg_GetStrOrDefault(ceList, "HardStopOld", "0");
 		if (isdigit((unsigned char)hsStr[0]))
-			opts.hardStopOld = Configuration::ToUInt(hsStr);
+			opts.hardStopOld = (UINT8)Configuration::ToUInt(hsStr);
 		else
-			opts.hardStopOld = Configuration::ToBool(hsStr);
+			opts.hardStopOld = Configuration::ToBool(hsStr) ? 1 : 0;
 	}
 	opts.fadeRawLogs =		  (bool)Cfg_GetBoolOrDefault(ceList, "FadeRAWLogs", false);
 	opts.showStrmCmds =		 (UINT8)Cfg_GetUIntOrDefault(ceList, "ShowStreamCmds", 0);

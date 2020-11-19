@@ -87,7 +87,7 @@ static bool IsAbsolutePath(const char* filePath)
 	{
 		if ((filePath[0] >= 'A' && filePath[0] <= 'Z') ||
 			(filePath[0] >= 'a' && filePath[0] <= 'z'))
-		return true;	// Windows device path: C:\path
+			return true;	// Windows device path: C:\path
 	}
 	if (! strncmp(filePath, "\\\\", 2))
 		return true;	// Windows network path: \\computername\path
@@ -117,13 +117,13 @@ std::string FindFile_List(const std::vector<std::string>& fileList, const std::v
 		for (fileIt = fileList.rbegin(); fileIt != fileList.rend(); ++fileIt)
 		{
 			fullName = CombinePaths(*pathIt, *fileIt);
-			printf("Testing path: %s ...\n", fullName.c_str());
+			//printf("Testing path: %s ...\n", fullName.c_str());
 			
 			hFile = fopen(fullName.c_str(), "r");
 			if (hFile != NULL)
 			{
 				fclose(hFile);
-				printf("Success.\n");
+				//printf("Success.\n");
 				return fullName;
 			}
 		}
@@ -234,4 +234,17 @@ char* utf8strseek(const char* str, size_t numChars)
 	}
 	
 	return (char*)str;
+}
+
+int count_digits(int value)
+{
+	int digits = 0;
+
+	do
+	{
+		value /= 10;
+		digits++;
+	} while (value > 0);
+
+	return digits;
 }

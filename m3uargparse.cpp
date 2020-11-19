@@ -25,27 +25,27 @@ static const char* M3UV2_META = "#EXTINF:";
 static const UINT8 UTF8_SIG[] = {0xEF, 0xBB, 0xBF};
 
 
-//UINT8 ParseSongFiles(const std::vector<char*>& args, std::vector<SongFileList>& songList, std::vector<std::string>& playlistList);
-//UINT8 ParseSongFiles(const std::vector<const char*>& args, std::vector<SongFileList>& songList, std::vector<std::string>& playlistList);
-//UINT8 ParseSongFiles(const std::vector<std::string>& args, std::vector<SongFileList>& songList, std::vector<std::string>& playlistList);
-//UINT8 ParseSongFiles(size_t argc, const char* const* argv, std::vector<SongFileList>& songList, std::vector<std::string>& playlistList);
+//UINT8 ParseSongFiles(const std::vector<char*>& args, std::vector<SongFileList>& songList, std::vector<PlaylistFileList>& playlistList);
+//UINT8 ParseSongFiles(const std::vector<const char*>& args, std::vector<SongFileList>& songList, std::vector<PlaylistFileList>& playlistList);
+//UINT8 ParseSongFiles(const std::vector<std::string>& args, std::vector<SongFileList>& songList, std::vector<PlaylistFileList>& playlistList);
+//UINT8 ParseSongFiles(size_t argc, const char* const* argv, std::vector<SongFileList>& songList, std::vector<PlaylistFileList>& playlistList);
 static bool ReadM3UPlaylist(const char* fileName, std::vector<SongFileList>& songList, bool isM3Uu8);
 static std::string WinStr2UTF8(const std::string& str);
 
 
-UINT8 ParseSongFiles(const std::vector<char*>& args, std::vector<SongFileList>& songList, std::vector<std::string>& playlistList)
+UINT8 ParseSongFiles(const std::vector<char*>& args, std::vector<SongFileList>& songList, std::vector<PlaylistFileList>& playlistList)
 {
 	const char* const* argv = args.empty() ? NULL : &args[0];
 	return ParseSongFiles(args.size(), argv, songList, playlistList);
 }
 
-UINT8 ParseSongFiles(const std::vector<const char*>& args, std::vector<SongFileList>& songList, std::vector<std::string>& playlistList)
+UINT8 ParseSongFiles(const std::vector<const char*>& args, std::vector<SongFileList>& songList, std::vector<PlaylistFileList>& playlistList)
 {
 	const char* const* argv = args.empty() ? NULL : &args[0];
 	return ParseSongFiles(args.size(), argv, songList, playlistList);
 }
 
-UINT8 ParseSongFiles(const std::vector<std::string>& args, std::vector<SongFileList>& songList, std::vector<std::string>& playlistList)
+UINT8 ParseSongFiles(const std::vector<std::string>& args, std::vector<SongFileList>& songList, std::vector<PlaylistFileList>& playlistList)
 {
 	std::vector<const char*> argVec(args.size());
 	size_t curArg;
@@ -56,7 +56,7 @@ UINT8 ParseSongFiles(const std::vector<std::string>& args, std::vector<SongFileL
 	return ParseSongFiles(argVec, songList, playlistList);
 }
 
-UINT8 ParseSongFiles(size_t argc, const char* const* argv, std::vector<SongFileList>& songList, std::vector<std::string>& playlistList)
+UINT8 ParseSongFiles(size_t argc, const char* const* argv, std::vector<SongFileList>& songList, std::vector<PlaylistFileList>& playlistList)
 {
 	size_t curArg;
 	const char* fileName;
@@ -84,15 +84,19 @@ UINT8 ParseSongFiles(size_t argc, const char* const* argv, std::vector<SongFileL
 				continue;
 			}
 			
+			PlaylistFileList pfl;
+			pfl.fileName = fileName;
+			pfl.songCount = songList.size() - plSong;
 			for (; plSong < songList.size(); plSong ++)
 				songList[plSong].playlistID = playlistList.size();
-			playlistList.push_back(fileName);
+			playlistList.push_back(pfl);
 		}
 		else
 		{
 			SongFileList sfl;
 			sfl.fileName = fileName;
-			sfl.playlistID = -1;
+			sfl.playlistID = (size_t)-1;
+			sfl.playlistSongID = (size_t)-1;
 			songList.push_back(sfl);
 		}
 	}
@@ -111,6 +115,7 @@ static bool ReadM3UPlaylist(const char* fileName, std::vector<SongFileList>& son
 	size_t METASTR_LEN;
 	UINT32 lineNo;
 	std::string tempStr;
+	size_t songID;
 	
 #if defined(WIN32) && _MSC_VER >= 1400
 	std::wstring fileNameW;
@@ -136,6 +141,7 @@ static bool ReadM3UPlaylist(const char* fileName, std::vector<SongFileList>& son
 	isV2Fmt = false;
 	METASTR_LEN = strlen(M3UV2_META);
 	lineNo = 0;
+	songID = 0;
 	while(hFile.good() && ! hFile.eof())
 	{
 		std::getline(hFile, tempStr);
@@ -164,8 +170,13 @@ static bool ReadM3UPlaylist(const char* fileName, std::vector<SongFileList>& son
 		
 		SongFileList sfl;
 		sfl.fileName = CombinePaths(baseDir, tempStr);
+		sfl.playlistID = (size_t)-1;
+		sfl.playlistSongID = songID;
+#ifndef _WIN32	// on Unix systems, make sure to turn '\' into '/'
 		StandardizeDirSeparators(sfl.fileName);
+#endif
 		songList.push_back(sfl);
+		songID ++;
 	}
 	
 	hFile.close();

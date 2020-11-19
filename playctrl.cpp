@@ -116,7 +116,7 @@ static UINT32 fileSize;
 
 extern Configuration playerCfg;
 extern std::vector<SongFileList> songList;
-extern std::vector<std::string> plList;
+extern std::vector<PlaylistFileList> plList;
 
 static int controlVal;
 static size_t curSong;
@@ -128,6 +128,10 @@ static PlayerWrapper myPlayer;
 UINT8 PlayerMain(void)
 {
 	UINT8 retVal;
+	bool showOnlyFileName = false;
+	
+	if (songList.size() == 1 && songList[0].playlistID == (size_t)-1)
+		showOnlyFileName = true;
 	
 	ParseConfiguration(genOpts, 0x100, chipOpts, playerCfg);
 	
@@ -162,24 +166,36 @@ UINT8 PlayerMain(void)
 	controlVal = +1;	// default: next song
 	for (curSong = 0; curSong < songList.size(); )
 	{
+		const SongFileList& sfl = songList[curSong];
 		DATA_LOADER* dLoad;
 		PlayerBase* player;
 		
-		if (songList.size() > 1)
+		if (showOnlyFileName)
+		{
+			printf("File Name:      %s\n", sfl.fileName.c_str());
+		}
+		else
 		{
 			cls();
 			printf(APP_NAME);
 			printf("\n----------\n");
-			if (songList[curSong].playlistID != (size_t)-1)
+			if (sfl.playlistID == (size_t)-1)
 			{
-				printf("\nPlaylist File:  %s\n", plList[songList[curSong].playlistID].c_str());
-				printf("Playlist Entry: %u / %u\n", 1 + (unsigned)curSong, (unsigned)songList.size());
+				printf("\n");
 			}
+			else
+			{
+				const PlaylistFileList& pfl = plList[sfl.playlistID];
+				printf("Playlist File:  %s\n", pfl.fileName.c_str());
+				//printf("Playlist File:  %s [song %u/%u]\n", pfl.fileName.c_str(),
+				//	1 + (unsigned)sfl.playlistSongID, (unsigned)pfl.songCount);
+			}
+			printf("File Name:      [%*u/%u] %s\n", count_digits((int)songList.size()), 1 + (unsigned)curSong,
+				(unsigned)songList.size(), sfl.fileName.c_str());
 		}
-		printf("File Name:      %s\n", songList[curSong].fileName.c_str());
 		fflush(stdout);
 		
-		retVal = OpenFile(songList[curSong].fileName, dLoad, player);
+		retVal = OpenFile(sfl.fileName, dLoad, player);
 		if (retVal & 0x80)
 		{
 			// TODO: show error message + wait for key press

@@ -88,7 +88,7 @@ static std::vector<std::string> cfgFileNames;
        Configuration playerCfg;
 
        std::vector<SongFileList> songList;
-       std::vector<std::string> plList;
+       std::vector<PlaylistFileList> plList;
 
 #ifdef USE_WMAIN
 int wmain(int argc, wchar_t* wargv[])
@@ -118,8 +118,8 @@ int main(int argc, char* argv[])
 	// Note: I'm not freeing argv anywhere. I'll let Windows take care about it this one time.
 #endif
 	
-	printf("VGM Player\n");
-	printf("----------\n");
+	printf("VGM Player");
+	printf("\n----------\n");
 	
 	argbase = ParseArguments(argc, argv, optionList, argCfg);
 	if (argbase == 0)
@@ -171,6 +171,7 @@ int main(int argc, char* argv[])
 		return 0;
 	}
 	
+	printf("\n");
 	retVal = PlayerMain();
 	printf("Done.\n");
 	
