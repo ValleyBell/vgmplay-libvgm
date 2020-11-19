@@ -177,6 +177,7 @@ static void ParseCfg_General(GeneralOptions& opts, const CfgSection& cfg)
 	opts.soundWhilePaused =	  (bool)Cfg_GetBoolOrDefault(ceList, "EmulatePause", false);
 	opts.pseudoSurround =	  (bool)Cfg_GetBoolOrDefault(ceList, "SurroundSound", false);
 	opts.preferJapTag =		  (bool)Cfg_GetBoolOrDefault(ceList, "PreferJapTag", false);
+	opts.showDevCore =		  (bool)Cfg_GetBoolOrDefault(ceList, "ShowChipCore", false);
 	{
 		std::string hsStr = Cfg_GetStrOrDefault(ceList, "HardStopOld", "0");
 		if (isdigit((unsigned char)hsStr[0]))
@@ -186,7 +187,11 @@ static void ParseCfg_General(GeneralOptions& opts, const CfgSection& cfg)
 	}
 	opts.fadeRawLogs =		  (bool)Cfg_GetBoolOrDefault(ceList, "FadeRAWLogs", false);
 	opts.showStrmCmds =		 (UINT8)Cfg_GetUIntOrDefault(ceList, "ShowStreamCmds", 0);
-	opts.audDriver =		        Cfg_GetStrOrDefault (ceList, "AudioDriver", "");
+	opts.audDriverName =	        Cfg_GetStrOrDefault (ceList, "AudioDriver", "");
+	if (! opts.audDriverName.empty() && isdigit((unsigned char)opts.audDriverName[0]))
+		opts.audDriverID = (UINT32)Configuration::ToUInt(opts.audDriverName);	// TOOD: make this conversion safer
+	else
+		opts.audDriverID = (UINT32)-1;
 	opts.audBuffers =		(UINT32)Cfg_GetUIntOrDefault(ceList, "AudioBuffers", 0);
 	opts.audOutDev =		(UINT32)Cfg_GetUIntOrDefault(ceList, "OutputDevice", 0);
 	
@@ -251,7 +256,7 @@ static void ParseCfg_ChipSection(ChipOptions& opts, const CfgSection& cfg, UINT8
 					opts.muteMask[1] = (UINT32)strtoul(value, NULL, 0);
 				break;
 			}
-		}	// end if key == "MuteMask_*"
+		}	// end if (key == "MuteMask_*")
 		else if (! strnicmp(key, "Mute", 4))
 		{
 			const char* chnName = &key[4];
@@ -405,7 +410,7 @@ static void ParseCfg_ChipSection(ChipOptions& opts, const CfgSection& cfg, UINT8
 				else
 					opts.muteMask[maskID] &= ~(1 << chnNum);
 			}
-		}	// end if key == "Mute*"
+		}	// end if (key == "Mute*")
 	}	// end for (ceoIt)
 	
 	opts.chipDisable = Cfg_GetBoolOrDefault(ceuList, "Disabled", false) ? 0x01 : 0x00;
@@ -430,7 +435,7 @@ static void ParseCfg_ChipSection(ChipOptions& opts, const CfgSection& cfg, UINT8
 			break;
 		case DEVID_YM2612:
 			if (emuType == 0)
-				opts.emuCore = FCC_MAME;
+				opts.emuCore = FCC_GPGX;
 			else if (emuType == 1)
 				opts.emuCore = FCC_NUKE;
 			else if (emuType == 2)

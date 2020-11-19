@@ -113,9 +113,10 @@ UINT8 PlayerWrapper::GetState(void) const
 	if (_player == NULL)
 		return 0x00;
 	UINT8 finalState = _myPlayState;
+	finalState |= _player->GetState();
 	if (_fadeSmplStart != (UINT32)-1)
 		finalState |= PLAYSTATE_FADE;
-	return _player->GetState();
+	return finalState;
 }
 
 UINT32 PlayerWrapper::GetCurPos(UINT8 unit) const

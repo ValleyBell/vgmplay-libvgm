@@ -21,11 +21,13 @@ struct GeneralOptions
 	bool soundWhilePaused;
 	bool pseudoSurround;
 	bool preferJapTag;
+	bool showDevCore;
 	UINT8 hardStopOld;
 	bool fadeRawLogs;
 	UINT8 showStrmCmds;
 	
-	std::string audDriver;
+	UINT32 audDriverID;
+	std::string audDriverName;
 	UINT32 audOutDev;
 	UINT32 audBuffers;
 };

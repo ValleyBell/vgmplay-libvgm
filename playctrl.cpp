@@ -1,9 +1,6 @@
 #ifdef _WIN32
 //#define _WIN32_WINNT	0x500	// for GetConsoleWindow()
 #include <windows.h>
-#ifdef _DEBUG
-#include <crtdbg.h>
-#endif
 #endif
 
 #include <stdlib.h>
@@ -65,6 +62,7 @@ static UINT8 PlayFile(void);
 static int GetPressedKey(void);
 static UINT8 HandleKeyPress(void);
 static inline std::string FCC2Str(UINT32 fcc);
+static INT8 GetTimePrintMode(double seconds);
 static std::string GetTimeStr(double seconds, INT8 showHours = 0);
 static UINT32 FillBuffer(void* drvStruct, void* userParam, UINT32 bufSize, void* Data);
 static UINT32 FillBufferDummy(void* drvStruct, void* userParam, UINT32 bufSize, void* data);
@@ -109,11 +107,7 @@ static bool manualRenderLoop = false;
 static bool dummyRenderAtLoad = false;
 static volatile UINT8 playState;
 
-static INT32 AudioOutDrv = 1;
-
-static bool showFileInfo = false;
 static INT8 PrintMSHours = 0;
-static bool showCores = true;
 static UINT32 fileSize;
 
 extern Configuration playerCfg;
@@ -137,7 +131,8 @@ UINT8 PlayerMain(void)
 	
 	ParseConfiguration(genOpts, 0x100, chipOpts, playerCfg);
 	
-	adOut.dTypeID = AudioOutDrv;
+	adOut.dTypeID = (INT32)genOpts.audDriverID;
+	adOut.dTypeName = genOpts.audDriverName;
 	retVal = InitAudioSystem();
 	if (retVal)
 		return 1;
@@ -218,6 +213,7 @@ UINT8 PlayerMain(void)
 		myPlayer.Start();
 		fileSize = DataLoader_GetSize(dLoad);
 		
+		PrintMSHours = GetTimePrintMode(myPlayer.GetTotalTime(0));
 		ShowSongInfo();
 		PlayFile();
 		
@@ -245,12 +241,6 @@ UINT8 PlayerMain(void)
 	
 	StopAudioDevice();
 	DeinitAudioSystem();
-	
-#if defined(_DEBUG) && (_MSC_VER >= 1400)
-	// doesn't work well with C++ containers
-	//if (_CrtDumpMemoryLeaks())
-	//	_getch();
-#endif
 	
 	return 0;
 }
@@ -432,13 +422,13 @@ static void ShowSongInfo(void)
 			const PLR_DEV_INFO& pdi1 = diList[curDev + 1];
 			const char* chipName1 = SndEmu_GetDevName(pdi1.type, 0x01, pdi1.devCfg);
 			bool sameChip = (chipName == chipName1);	// we assume static pointers to chip names here
-			sameChip &= (! (pdi.core != pdi1.core && showCores));
+			sameChip &= (! (pdi.core != pdi1.core && genOpts.showDevCore));
 			if (! sameChip)
 				break;
 		}
 		if (drvCnt > 1)
 			printf("%ux", drvCnt);
-		if (showCores)
+		if (genOpts.showDevCore)
 			printf("%s (%s), ", chipName, FCC2Str(pdi.core).c_str());
 		else
 			printf("%s, ", chipName);
@@ -453,7 +443,7 @@ static UINT8 PlayFile(void)
 	UINT8 retVal;
 	bool needRefresh;
 	
-	if (showFileInfo)
+#if 0
 	{
 		PLR_SONG_INFO sInf;
 		std::vector<PLR_DEV_INFO> diList;
@@ -471,6 +461,7 @@ static UINT8 PlayFile(void)
 				(int)pdi.id, pdi.type, (INT8)pdi.instance, FCC2Str(pdi.core).c_str(), pdi.devCfg->clock, pdi.smplRate, pdi.volume);
 		}
 	}
+#endif
 	
 	if (adOut.data != NULL)
 		retVal = AudioDrv_SetCallback(adOut.data, FillBuffer, &myPlayer);
@@ -690,6 +681,8 @@ static UINT8 HandleKeyPress(void)
 		}
 		break;
 	case 'F':	// fade out
+		// enforce "non-playlist" fade-out
+		myPlayer.SetFadeTime(genOpts.fadeTime_single * myPlayer.GetSampleRate() / 1000);
 		myPlayer.FadeOut();
 		break;
 	case 'R':	// restart
@@ -766,6 +759,18 @@ static inline std::string FCC2Str(UINT32 fcc)
 	result[2] = (char)((fcc >>  8) & 0xFF);
 	result[3] = (char)((fcc >>  0) & 0xFF);
 	return result;
+}
+
+static INT8 GetTimePrintMode(double seconds)
+{
+	UINT32 csec;
+	UINT32 sec;
+	UINT32 min;
+	
+	csec = (UINT32)(seconds * 100 + 0.5);
+	sec = csec / 100;
+	min = sec / 60;
+	return (min >= 60);
 }
 
 static std::string GetTimeStr(double seconds, INT8 showHours)
@@ -851,6 +856,9 @@ static UINT8 FilePlayCallback(PlayerBase* player, void* userParam, UINT8 evtType
 
 static UINT8 ChooseAudioDriver(AudioDriver* aDrv)
 {
+	// special numbers for aDrv->dTypeID:
+	//	-1 - select driver by name
+	//	-2 - select last found driver
 	UINT32 drvCount;
 	UINT32 curDrv;
 	AUDDRV_INFO* drvInfo;
@@ -859,13 +867,16 @@ static UINT8 ChooseAudioDriver(AudioDriver* aDrv)
 	if (aDrv->dTypeID != -1)
 	{
 		INT32 typedDrv;
+		UINT32 lastDrv;
 		// go through all audio drivers get the ID of the requested Output/Disk Writer driver
 		drvCount = Audio_GetDriverCount();
+		lastDrv = (UINT32)-1;
 		for (typedDrv = 0, curDrv = 0; curDrv < drvCount; curDrv ++)
 		{
 			Audio_GetDriverInfo(curDrv, &drvInfo);
 			if (drvInfo->drvType == aDrv->driverType)
 			{
+				lastDrv = curDrv;
 				if (typedDrv == aDrv->dTypeID)	// choose Nth driver with the respective type
 				{
 					aDrv->driverID = curDrv;
@@ -874,11 +885,13 @@ static UINT8 ChooseAudioDriver(AudioDriver* aDrv)
 				typedDrv ++;
 			}
 		}
+		if (aDrv->dTypeID == -2)
+			aDrv->driverID = lastDrv;
 	}
 	else
 	{
 		if (aDrv->dTypeName.empty())
-			return 0x00;	// no driver chosen
+			return 0x01;	// no driver chosen
 		
 		// go through all audio drivers get the ID of the requested Output/Disk Writer driver
 		drvCount = Audio_GetDriverCount();
@@ -940,15 +953,14 @@ static UINT8 InitAudioSystem(void)
 		return retVal;
 	
 	retVal = ChooseAudioDriver(&adOut);
+	if (retVal == 0x01)
+	{
+		adOut.dTypeID = -2;
+		retVal = ChooseAudioDriver(&adOut);
+	}
 	if (retVal)
 	{
 		fprintf(stderr, "Requested audio output driver not found!\n");
-		Audio_Deinit();
-		return AERR_NODRVS;
-	}
-	if (adOut.driverID == -1)
-	{
-		fprintf(stderr, "No audio output driver chosen!\n");
 		Audio_Deinit();
 		return AERR_NODRVS;
 	}
@@ -958,7 +970,7 @@ static UINT8 InitAudioSystem(void)
 	retVal = InitAudioDriver(&adOut);
 	if (retVal)
 	{
-		fprintf(stderr, "WaveOut: Driver Init Error: %02X\n", retVal);
+		fprintf(stderr, "Audio Driver Init Error: %02X\n", retVal);
 		Audio_Deinit();
 		return retVal;
 	}

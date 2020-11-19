@@ -60,7 +60,7 @@ Configuration& Configuration::operator+=(const Configuration& rhs)
 	
 	// remove quotation marks - unless they are escaped with \"
 	valStr.reserve(text.size());
-	for (curPos = 0; curPos < valStr.length(); curPos ++)
+	for (curPos = 0; curPos < text.length(); curPos ++)
 	{
 		if (state & 0x02)
 		{
