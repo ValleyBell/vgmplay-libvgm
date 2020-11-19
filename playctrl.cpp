@@ -121,13 +121,15 @@ static GeneralOptions genOpts;
 static ChipOptions chipOpts[0x100];
 static PlayerWrapper myPlayer;
 
-UINT8 PlayerMain(void)
+UINT8 PlayerMain(UINT8 showFileName)
 {
 	UINT8 retVal;
-	bool showOnlyFileName = false;
+	UINT8 fnShowMode;
 	
 	if (songList.size() == 1 && songList[0].playlistID == (size_t)-1)
-		showOnlyFileName = true;
+		fnShowMode = showFileName ? 1 : 2;
+	else
+		fnShowMode = 0;
 	
 	ParseConfiguration(genOpts, 0x100, chipOpts, playerCfg);
 	
@@ -167,11 +169,11 @@ UINT8 PlayerMain(void)
 		DATA_LOADER* dLoad;
 		PlayerBase* player;
 		
-		if (showOnlyFileName)
+		if (fnShowMode == 1)
 		{
 			printf("File Name:      %s\n", sfl.fileName.c_str());
 		}
-		else
+		else if (fnShowMode == 0)
 		{
 			cls();
 			printf(APP_NAME);

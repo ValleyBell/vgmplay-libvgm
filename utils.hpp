@@ -23,5 +23,7 @@ std::string Vector2String(const unsigned char* data, size_t startPos, size_t end
 size_t utf8strlen(const char* str);
 char* utf8strseek(const char* str, size_t numChars);
 int count_digits(int value);
+void RemoveControlChars(std::string& str);
+void RemoveQuotationMarks(std::string& str, char quotMark);
 
 #endif	// __UTILS_HPP__

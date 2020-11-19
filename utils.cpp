@@ -3,7 +3,6 @@
 #include <string>
 #include <stdio.h>
 #include <vector>
-#include <iconv.h>
 
 #include "utils.hpp"
 
@@ -22,6 +21,8 @@ static size_t utf8_chrsize(const char* utf8chr);
 static bool utf8_advance(const char** str);
 //size_t utf8strlen(const char* str);
 //char* utf8strseek(const char* str, size_t numChars);
+//void RemoveControlChars(std::string& str);
+//void RemoveQuotationMarks(std::string& str, char quotMark);
 
 
 static const char* GetLastDirSeparator(const char* filePath)
@@ -247,4 +248,30 @@ int count_digits(int value)
 	} while (value > 0);
 
 	return digits;
+}
+
+void RemoveControlChars(std::string& str)
+{
+	size_t strLen = str.length();
+	
+	while(strLen > 0 && (unsigned char)str[strLen - 1] < 0x20)
+		strLen --;
+	str.resize(strLen);
+	
+	return;
+}
+
+void RemoveQuotationMarks(std::string& str, char quotMark)
+{
+	if (str.empty())
+		return;
+	if (str[0] != quotMark)
+		return;
+	
+	size_t lastQmPos = str.rfind(quotMark);
+	if (lastQmPos == std::string::npos)
+		lastQmPos = str.length();
+	str = str.substr(1, lastQmPos - 1);
+	
+	return;
 }

@@ -43,7 +43,7 @@
 #endif
 
 
-extern UINT8 PlayerMain(void);
+extern UINT8 PlayerMain(UINT8 showFileName);
 
 
 #define VGMPLAY_VER_STR	"0.5.0"
@@ -63,6 +63,8 @@ typedef std::vector<OptionItem> OptionList;
 
 static char* GetAppFilePath(void);
 static void InitAppSearchPaths(const char* argv_0);
+static std::string ReadLineAsUTF8(void);
+
 static int IniValHandler(void* user, const char* section, const char* name, const char* value);
 static UINT8 LoadConfig(const std::string& iniPath, Configuration& cfg);
 static std::string GenerateOptData(const OptionList& optList, std::vector<struct option>* longOpts);
@@ -103,6 +105,7 @@ int main(int argc, char* argv[])
 	UINT8 retVal;
 	//int resVal;
 	Configuration argCfg;
+	UINT8 fnEnterMode;
 	
 	setlocale(LC_ALL, "");	// enable UTF-8 support on Linux
 	setlocale(LC_NUMERIC, "C");	// enforce decimal dot
@@ -126,6 +129,7 @@ int main(int argc, char* argv[])
 		return 0;
 	else if (argbase < 0)
 		return 1;
+#if 0
 	if (argc < argbase + 1)
 	{
 		PrintVersion();
@@ -133,6 +137,7 @@ int main(int argc, char* argv[])
 		PrintArgumentHelp(optionList);
 		return 0;
 	}
+#endif
 	
 	InitAppSearchPaths(argv[0]);
 	cfgFileNames.push_back("VGMPlay.ini");
@@ -162,7 +167,23 @@ int main(int argc, char* argv[])
 	}
 #endif
 	
-	retVal = ParseSongFiles(std::vector<const char*>(argv + argbase, argv + argc), songList, plList);
+	if (argbase < argc)
+	{
+		fnEnterMode = 1;
+		retVal = ParseSongFiles(std::vector<const char*>(argv + argbase, argv + argc), songList, plList);
+	}
+	else
+	{
+		fnEnterMode = 0;
+		printf("\nFile Name:\t");
+		std::string fileName = ReadLineAsUTF8();
+		if (fileName.empty())
+			return 0;	// nothing entered
+		
+		std::vector<const char*> fileList;
+		fileList.push_back(fileName.c_str());
+		retVal = ParseSongFiles(fileList, songList, plList);
+	}
 	if (retVal)
 		printf("One or more playlists couldn't be read!\n");
 	if (songList.empty())
@@ -170,10 +191,9 @@ int main(int argc, char* argv[])
 		printf("No songs to play.\n");
 		return 0;
 	}
-	
 	printf("\n");
-	retVal = PlayerMain();
-	printf("Done.\n");
+	retVal = PlayerMain(fnEnterMode);
+	printf("Bye.\n");
 	
 	return 0;
 }
@@ -266,6 +286,57 @@ static void InitAppSearchPaths(const char* argv_0)
 	
 	return;
 }
+
+static std::string ReadLineAsUTF8(void)
+{
+	std::string fileName(MAX_PATH, '\0');
+	char* strPtr;
+#ifdef _WIN32
+	UINT oldCP = GetConsoleCP();
+	
+	// Set the Console Input Codepage to ANSI.
+	// The Output Codepage must be left at OEM, else the displayed characters are wrong.
+	SetConsoleCP(GetACP());	// set input codepage
+#endif
+	
+	strPtr = fgets(&fileName[0], (int)fileName.size(), stdin);
+	if (strPtr == NULL)
+		fileName[0] = '\0';
+	fileName.resize(strlen(&fileName[0]));	// resize to actual size
+	
+	RemoveControlChars(fileName);
+#ifdef _WIN32
+	RemoveQuotationMarks(fileName, '\"');
+#else
+	RemoveQuotationMarks(fileName, '\'');
+#endif
+	
+#ifdef _WIN32
+	// Using GetConsoleCP() is important here, as playing with the console font resets
+	// the Console Codepage to OEM.
+	{
+		std::wstring fileNameW;
+		UINT conCP = GetConsoleCP();
+		int bufSize;
+		
+		// convert from ANSI/OEM codepage via UTF-16 to UTF-8
+		// using string.size() results in a conversion that *excludes* the '\0' terminator
+		bufSize = MultiByteToWideChar(conCP, 0, fileName.c_str(), fileName.size(), NULL, 0);
+		fileNameW.resize(bufSize);
+		MultiByteToWideChar(conCP, 0, fileName.c_str(), fileName.size(), &fileNameW[0], bufSize);
+		
+		bufSize = WideCharToMultiByte(CP_UTF8, 0, fileNameW.c_str(), fileNameW.size(), NULL, 0, NULL, NULL);
+		fileName.resize(bufSize);
+		WideCharToMultiByte(CP_UTF8, 0, fileNameW.c_str(), fileNameW.size(), &fileName[0], bufSize, NULL, NULL);
+	}
+	
+	// This fixes the display of non-ANSI characters.
+	SetConsoleCP(oldCP);
+#endif
+	
+	return fileName;
+}
+
 
 static int IniValHandler(void* user, const char* section, const char* name, const char* value)
 {
