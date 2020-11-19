@@ -67,6 +67,7 @@ static UINT8 HandleKeyPress(void);
 static inline std::string FCC2Str(UINT32 fcc);
 static std::string GetTimeStr(double seconds, INT8 showHours = 0);
 static UINT32 FillBuffer(void* drvStruct, void* userParam, UINT32 bufSize, void* Data);
+static UINT32 FillBufferDummy(void* drvStruct, void* userParam, UINT32 bufSize, void* data);
 static UINT8 FilePlayCallback(PlayerBase* player, void* userParam, UINT8 evtType, void* evtParam);
 static UINT8 ChooseAudioDriver(AudioDriver* aDrv);
 static UINT8 InitAudioDriver(AudioDriver* aDrv);
@@ -105,6 +106,7 @@ static std::vector<UINT8> audioBuf;
 static OS_MUTEX* renderMtx;	// render thread mutex
 
 static bool manualRenderLoop = false;
+static bool dummyRenderAtLoad = false;
 static volatile UINT8 playState;
 
 static INT32 AudioOutDrv = 1;
@@ -451,8 +453,6 @@ static UINT8 PlayFile(void)
 	UINT8 retVal;
 	bool needRefresh;
 	
-	//myPlayer.SetFadeTime(myPlayer.GetSampleRate() * 4);
-	
 	if (showFileInfo)
 	{
 		PLR_SONG_INFO sInf;
@@ -529,7 +529,12 @@ static UINT8 PlayFile(void)
 	// remove callback to prevent further rendering
 	// also waits for render thread to finish its work
 	if (adOut.data != NULL)
-		AudioDrv_SetCallback(adOut.data, NULL, NULL);
+	{
+		if (dummyRenderAtLoad)
+			AudioDrv_SetCallback(adOut.data, FillBufferDummy, NULL);
+		else
+			AudioDrv_SetCallback(adOut.data, NULL, NULL);
+	}
 	
 	if (! controlVal)
 	{
@@ -815,6 +820,12 @@ static UINT32 FillBuffer(void* drvStruct, void* userParam, UINT32 bufSize, void*
 	return renderedBytes;
 }
 
+static UINT32 FillBufferDummy(void* drvStruct, void* userParam, UINT32 bufSize, void* data)
+{
+	memset(data, 0x00, bufSize);
+	return bufSize;
+}
+
 static UINT8 FilePlayCallback(PlayerBase* player, void* userParam, UINT8 evtType, void* evtParam)
 {
 	switch(evtType)
@@ -901,11 +912,15 @@ static UINT8 InitAudioDriver(AudioDriver* aDrv)
 	Audio_GetDriverInfo(aDrv->driverID, &drvInfo);
 #ifdef AUDDRV_DSOUND
 	if (drvInfo->drvSig == ADRVSIG_DSOUND)
+	{
 		DSound_SetHWnd(AudioDrv_GetDrvData(aDrv->data), GetDesktopWindow());
+		// We need to use a dummy audio renderer to prevent stuttering while loading files.
+		dummyRenderAtLoad = true;
+	}
 #endif
 #ifdef AUDDRV_PULSE
 	if (drvInfo->drvSig == ADRVSIG_PULSE)
-		Pulse_SetStreamDesc(AudioDrv_GetDrvData(aDrv->data), "VGM Player");
+		Pulse_SetStreamDesc(AudioDrv_GetDrvData(aDrv->data), APP_NAME);
 #endif
 	
 	return AERR_OK;
