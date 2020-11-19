@@ -178,6 +178,7 @@ static void ParseCfg_General(GeneralOptions& opts, const CfgSection& cfg)
 	opts.pseudoSurround =	  (bool)Cfg_GetBoolOrDefault(ceList, "SurroundSound", false);
 	opts.preferJapTag =		  (bool)Cfg_GetBoolOrDefault(ceList, "PreferJapTag", false);
 	opts.showDevCore =		  (bool)Cfg_GetBoolOrDefault(ceList, "ShowChipCore", false);
+	opts.setTermTitle =		  (bool)Cfg_GetBoolOrDefault(ceList, "SetTerminalTitle", true);
 	{
 		std::string hsStr = Cfg_GetStrOrDefault(ceList, "HardStopOld", "0");
 		if (isdigit((unsigned char)hsStr[0]))

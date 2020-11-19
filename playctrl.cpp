@@ -1,8 +1,3 @@
-#ifdef _WIN32
-//#define _WIN32_WINNT	0x500	// for GetConsoleWindow()
-#include <windows.h>
-#endif
-
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
@@ -12,6 +7,8 @@
 #include <math.h>
 
 #ifdef _WIN32
+//#define _WIN32_WINNT	0x500	// for GetConsoleWindow()
+#include <windows.h>
 extern "C" int __cdecl _getch(void);	// from conio.h
 extern "C" int __cdecl _kbhit(void);
 #else
@@ -19,6 +16,10 @@ extern "C" int __cdecl _kbhit(void);
 #include <termios.h>
 #include <sys/time.h>	// for struct timeval in _kbhit()
 #define	Sleep(msec)	usleep(msec * 1000)
+#endif
+
+#ifdef _MSC_VER
+#define snprintf	_snprintf
 #endif
 
 #include <stdtype.h>
@@ -57,7 +58,8 @@ struct AudioDriver
 UINT8 PlayerMain(void);
 static UINT8 OpenFile(const std::string& fileName, DATA_LOADER*& dLoad, PlayerBase*& player);
 static const char* GetTagForDisp(const std::map<std::string, std::string>& tags, const std::string& tagName);
-static void ShowSongInfo(void);
+static void ShowSongInfo(const std::string& fileName);
+static void ShowConsoleTitle(const std::string& fileName, const std::string& titleTag, const std::string& gameTag);
 static UINT8 PlayFile(void);
 static int GetPressedKey(void);
 static UINT8 HandleKeyPress(void);
@@ -216,7 +218,7 @@ UINT8 PlayerMain(UINT8 showFileName)
 		fileSize = DataLoader_GetSize(dLoad);
 		
 		PrintMSHours = GetTimePrintMode(myPlayer.GetTotalTime(0));
-		ShowSongInfo();
+		ShowSongInfo(sfl.fileName);
 		PlayFile();
 		
 		myPlayer.Stop();
@@ -317,7 +319,7 @@ static const char* GetTagForDisp(const std::map<std::string, std::string>& tags,
 	return (tagIt == tags.end()) ? "" : tagIt->second.c_str();
 }
 
-static void ShowSongInfo(void)
+static void ShowSongInfo(const std::string& fileName)
 {
 	PlayerBase* player = myPlayer.GetPlayer();
 	PLR_SONG_INFO sInf;
@@ -362,6 +364,9 @@ static void ShowSongInfo(void)
 		
 		sprintf(verStr, "DRO v%u", drohdr->verMajor);	// DRO has a "verMinor" field, but it's always 0
 	}
+	
+	if (genOpts.setTermTitle)
+		ShowConsoleTitle(fileName, GetTagForDisp(tags, "TITLE"), GetTagForDisp(tags, "GAME"));
 	
 	printf("Track Title:    %s\n", GetTagForDisp(tags, "TITLE"));
 	printf("Game Name:      %s\n", GetTagForDisp(tags, "GAME"));
@@ -436,6 +441,30 @@ static void ShowSongInfo(void)
 			printf("%s, ", chipName);
 	}
 	printf("\b\b \n\n");
+	return;
+}
+
+static void ShowConsoleTitle(const std::string& fileName, const std::string& titleTag, const std::string& gameTag)
+{
+	std::string titleStr;
+	
+	// show "Song (Game) - VGM Player" as console title
+	if (! titleTag.empty())
+		titleStr = titleTag;
+	else
+		titleStr = GetFileTitle(fileName.c_str());
+	
+	if (! gameTag.empty())
+		titleStr = titleStr + " (" + gameTag + ")";
+	
+	titleStr = titleStr + " - " + APP_NAME;
+	
+#ifdef WIN32
+	SetConsoleTitleA(titleStr.c_str());			// Set Windows Console Title
+#else
+	printf("\x1B]0;%ls\x07", titleStr.c_str());	// Set xterm/rxvt Terminal Title
+#endif
+	
 	return;
 }
 

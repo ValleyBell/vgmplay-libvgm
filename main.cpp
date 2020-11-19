@@ -46,6 +46,7 @@
 extern UINT8 PlayerMain(UINT8 showFileName);
 
 
+#define APP_NAME		"VGM Player"
 #define VGMPLAY_VER_STR	"0.5.0"
 #define VGM_VER_STR		"1.71b"
 
@@ -121,7 +122,7 @@ int main(int argc, char* argv[])
 	// Note: I'm not freeing argv anywhere. I'll let Windows take care about it this one time.
 #endif
 	
-	printf("VGM Player");
+	printf(APP_NAME);
 	printf("\n----------\n");
 	
 	argbase = ParseArguments(argc, argv, optionList, argCfg);

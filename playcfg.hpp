@@ -22,6 +22,7 @@ struct GeneralOptions
 	bool pseudoSurround;
 	bool preferJapTag;
 	bool showDevCore;
+	bool setTermTitle;
 	UINT8 hardStopOld;
 	bool fadeRawLogs;
 	UINT8 showStrmCmds;
