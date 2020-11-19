@@ -275,6 +275,19 @@ static UINT8 OpenFile(const std::string& fileName, DATA_LOADER*& dLoad, PlayerBa
 	return 0x00;
 }
 
+static void Tags_RemoveEmpty(std::map<std::string, std::string>& tags)
+{
+	auto tagIt = tags.begin();
+	for (tagIt = tags.begin(); tagIt != tags.end(); )
+	{
+		if (tagIt->second.empty())
+			tagIt = tags.erase(tagIt);
+		else
+			++ tagIt;
+	}
+	return;
+}
+
 static void Tags_LangFilter(std::map<std::string, std::string>& tags, const std::string& tagName, const std::vector<std::string>& langPostfixes, int defaultLang)
 {
 	// 1. search for matching lang-tag
@@ -326,6 +339,7 @@ static void ShowSongInfo(const std::string& fileName)
 	std::map<std::string, std::string> tags;
 	std::vector<std::string> langPostfixes;
 	char verStr[0x20];
+	int defaultLang = genOpts.preferJapTag ? 1 : 0;
 	
 	langPostfixes.push_back("");
 	langPostfixes.push_back("-JPN");
@@ -334,10 +348,12 @@ static void ShowSongInfo(const std::string& fileName)
 	for (const char* const* t = tagList; *t != NULL; t += 2)
 		tags[t[0]] = t[1];
 	
-	Tags_LangFilter(tags, "TITLE", langPostfixes, -1);
-	Tags_LangFilter(tags, "GAME", langPostfixes, -1);
-	Tags_LangFilter(tags, "SYSTEM", langPostfixes, -1);
-	Tags_LangFilter(tags, "ARTIST", langPostfixes, -1);
+	Tags_RemoveEmpty(tags);	// need to remove empty VGM tags, else the LangFilter may choose them
+	
+	Tags_LangFilter(tags, "TITLE", langPostfixes, defaultLang);
+	Tags_LangFilter(tags, "GAME", langPostfixes, defaultLang);
+	Tags_LangFilter(tags, "SYSTEM", langPostfixes, defaultLang);
+	Tags_LangFilter(tags, "ARTIST", langPostfixes, defaultLang);
 	
 	INT16 volGain = 0x00;
 	player->GetSongInfo(sInf);
