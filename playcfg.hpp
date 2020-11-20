@@ -30,7 +30,8 @@ struct GeneralOptions
 	UINT32 audDriverID;
 	std::string audDriverName;
 	UINT32 audOutDev;
-	UINT32 audBuffers;
+	UINT32 audBufCnt;
+	UINT32 audBufTime;
 };
 struct ChipOptions
 {

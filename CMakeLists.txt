@@ -103,6 +103,8 @@ set(PLAYER_HEADERS
 	utils.hpp
 	config.hpp
 	m3uargparse.hpp
+	player.hpp
+	playcfg.hpp
 )
 set(PLAYER_FILES
 	utils.cpp

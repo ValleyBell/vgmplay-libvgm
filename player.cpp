@@ -12,9 +12,10 @@
 
 PlayerWrapper::PlayerWrapper()
 {
-	_masterVol = 0x10000;	// fixed point 16.16
-	_loopCount = 2;
-	_fadeSmpls = 0;
+	_config.masterVol = 0x10000;	// fixed point 16.16
+	_config.chnInvert = 0x00;
+	_config.loopCount = 2;
+	_config.fadeSmpls = 0;
 	return;
 }
 
@@ -68,36 +69,51 @@ void PlayerWrapper::SetSampleRate(UINT32 sampleRate)
 
 double PlayerWrapper::GetPlaybackSpeed(void) const
 {
-	return _pbSpeed;
+	return _config.pbSpeed;
 }
 
 void PlayerWrapper::SetPlaybackSpeed(double speed)
 {
-	_pbSpeed = speed;
+	_config.pbSpeed = speed;
 	if (_player != NULL)
-		_player->SetPlaybackSpeed(_pbSpeed);
+		_player->SetPlaybackSpeed(_config.pbSpeed);
 	return;
 }
 
 UINT32 PlayerWrapper::GetLoopCount(void) const
 {
-	return _loopCount;
+	return _config.loopCount;
 }
 
 void PlayerWrapper::SetLoopCount(UINT32 loops)
 {
-	_loopCount = loops;
+	_config.loopCount = loops;
 	return;
 }
 
 UINT32 PlayerWrapper::GetFadeTime(void) const
 {
-	return _fadeSmpls;
+	return _config.fadeSmpls;
 }
 
 void PlayerWrapper::SetFadeTime(UINT32 smplCnt)
 {
-	_fadeSmpls = smplCnt;
+	_config.fadeSmpls = smplCnt;
+	return;
+}
+
+const PlrWrapConfig& PlayerWrapper::GetConfiguration(void) const
+{
+	return _config;
+}
+
+void PlayerWrapper::SetConfiguration(const PlrWrapConfig& config)
+{
+	double oldPbSpeed = _config.pbSpeed;
+	
+	_config = config;
+	if (_player != NULL && oldPbSpeed != _config.pbSpeed)
+		_player->SetPlaybackSpeed(_config.pbSpeed);
 	return;
 }
 
@@ -146,7 +162,7 @@ double PlayerWrapper::GetTotalTime(UINT8 includeLoops) const
 	if (_player == NULL)
 		return -1.0;
 	if (includeLoops)
-		return _player->Tick2Second(_player->GetTotalPlayTicks(_loopCount));
+		return _player->Tick2Second(_player->GetTotalPlayTicks(_config.loopCount));
 	else
 		return _player->Tick2Second(_player->GetTotalPlayTicks(1));
 }
@@ -218,7 +234,7 @@ UINT8 PlayerWrapper::Start(void)
 	if (_player == NULL)
 		return 0xFF;
 	_player->SetSampleRate(_smplRate);
-	_player->SetPlaybackSpeed(_pbSpeed);
+	_player->SetPlaybackSpeed(_config.pbSpeed);
 	_fadeSmplStart = (UINT32)-1;
 	
 	UINT8 retVal = _player->Start();
@@ -284,7 +300,7 @@ UINT32 PlayerWrapper::CalcCurrentVolume(UINT32 playbackSmpl)
 	UINT32 curVol;	// 16.16 fixed point
 	
 	// 1. master volume
-	curVol = _masterVol;
+	curVol = _config.masterVol;
 	
 	// 2. apply fade-out factor
 	if (playbackSmpl >= _fadeSmplStart)
@@ -293,10 +309,10 @@ UINT32 PlayerWrapper::CalcCurrentVolume(UINT32 playbackSmpl)
 		UINT64 fadeVol;	// 64 bit for less type casts when doing multiplications with .16 fixed point
 		
 		fadeSmpls = playbackSmpl - _fadeSmplStart;
-		if (fadeSmpls >= _fadeSmpls)
+		if (fadeSmpls >= _config.fadeSmpls)
 			return 0x0000;	// going beyond fade time -> volume 0
 		
-		fadeVol = (UINT64)fadeSmpls * 0x10000 / _fadeSmpls;
+		fadeVol = (UINT64)fadeSmpls * 0x10000 / _config.fadeSmpls;
 		fadeVol = 0x10000 - fadeVol;	// fade from full volume to silence
 		fadeVol = fadeVol * fadeVol;	// logarithmic fading sounds nicer
 		curVol = (UINT32)((fadeVol * curVol) >> 32);
@@ -345,7 +361,7 @@ UINT32 PlayerWrapper::Render(UINT32 bufSize, void* data)
 		if (basePbSmpl >= _fadeSmplStart)
 		{
 			UINT32 fadeSmpls = basePbSmpl - _fadeSmplStart;
-			if (fadeSmpls >= _fadeSmpls && ! (_myPlayState & PLAYSTATE_END))
+			if (fadeSmpls >= _config.fadeSmpls && ! (_myPlayState & PLAYSTATE_END))
 			{
 				_myPlayState |= PLAYSTATE_END;
 				if (_plrCbFunc != NULL)
@@ -366,6 +382,11 @@ UINT32 PlayerWrapper::Render(UINT32 bufSize, void* data)
 		fnlSmpl.L = ((fnlSmpl.L >> VOL_PRESH) * curVolume) >> VOL_POSTSH;
 		fnlSmpl.R = ((fnlSmpl.R >> VOL_PRESH) * curVolume) >> VOL_POSTSH;
 #endif
+		
+		if (_config.chnInvert & 0x01)
+			fnlSmpl.L = -fnlSmpl.L;
+		if (_config.chnInvert & 0x02)
+			fnlSmpl.R = -fnlSmpl.R;
 		
 		fnlSmpl.L >>= 8;	// 24 bit -> 16 bit
 		fnlSmpl.R >>= 8;
@@ -407,9 +428,9 @@ UINT8 PlayerWrapper::PlayCallback(PlayerBase* player, UINT8 evtType, void* evtPa
 	case PLREVT_LOOP:
 		{
 			UINT32* curLoop = (UINT32*)evtParam;
-			if (_loopCount > 0 && *curLoop >= _loopCount)
+			if (_config.loopCount > 0 && *curLoop >= _config.loopCount)
 			{
-				if (_fadeSmpls == 0)
+				if (_config.fadeSmpls == 0)
 					return 0x01;	// send "stop" signal to player engine
 				if (_fadeSmplStart == (UINT32)-1)
 					_fadeSmplStart = player->GetCurPos(PLAYPOS_SAMPLE);

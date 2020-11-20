@@ -193,7 +193,8 @@ static void ParseCfg_General(GeneralOptions& opts, const CfgSection& cfg)
 		opts.audDriverID = (UINT32)Configuration::ToUInt(opts.audDriverName);	// TOOD: make this conversion safer
 	else
 		opts.audDriverID = (UINT32)-1;
-	opts.audBuffers =		(UINT32)Cfg_GetUIntOrDefault(ceList, "AudioBuffers", 0);
+	opts.audBufCnt =		(UINT32)Cfg_GetUIntOrDefault(ceList, "AudioBuffers", 0);
+	opts.audBufTime =		(UINT32)Cfg_GetUIntOrDefault(ceList, "AudioBufferSize", 0);
 	opts.audOutDev =		(UINT32)Cfg_GetUIntOrDefault(ceList, "OutputDevice", 0);
 	
 	return;
@@ -550,10 +551,15 @@ void ApplyCfg_General(PlayerWrapper& player, const GeneralOptions& opts)
 	const std::vector<PlayerBase*>& plrs = player.GetRegisteredPlayers();
 	size_t curPlr;
 	UINT8 retVal;
+	PlrWrapConfig pwCfg;
 	
-	player.SetPlaybackSpeed(1.0);
-	player.SetLoopCount(opts.maxLoops);
-	player.SetFadeTime(opts.fadeTime_single * opts.smplRate / 1000);
+	pwCfg = player.GetConfiguration();
+	pwCfg.masterVol = (INT32)(0x10000 * opts.volume + 0.5);
+	pwCfg.chnInvert = opts.pseudoSurround ? 0x02 : 0x00;
+	pwCfg.loopCount = opts.maxLoops;
+	pwCfg.fadeSmpls = opts.fadeTime_single * opts.smplRate / 1000;
+	pwCfg.pbSpeed = 1.0;
+	player.SetConfiguration(pwCfg);
 	
 	for (curPlr = 0; curPlr < plrs.size(); curPlr ++)
 	{

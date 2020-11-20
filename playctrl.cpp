@@ -135,8 +135,6 @@ UINT8 PlayerMain(UINT8 showFileName)
 	
 	ParseConfiguration(genOpts, 0x100, chipOpts, playerCfg);
 	
-	adOut.dTypeID = (INT32)genOpts.audDriverID;
-	adOut.dTypeName = genOpts.audDriverName;
 	retVal = InitAudioSystem();
 	if (retVal)
 		return 1;
@@ -1003,10 +1001,18 @@ static UINT8 InitAudioSystem(void)
 	if (retVal == AERR_NODRVS)
 		return retVal;
 	
+	adOut.dTypeID = (INT32)genOpts.audDriverID;
+	adOut.dTypeName = genOpts.audDriverName;
+	adOut.deviceID = genOpts.audOutDev;
+
 	retVal = ChooseAudioDriver(&adOut);
 	if (retVal == 0x01)
 	{
-		adOut.dTypeID = -2;
+#ifdef _WIN32
+		adOut.dTypeID = 0;	// on Windows, fall back to first driver (usually WinMM)
+#else
+		adOut.dTypeID = -2;	// on Linux, fall back to last driver (usually PulseAudio)
+#endif
 		retVal = ChooseAudioDriver(&adOut);
 	}
 	if (retVal)
@@ -1059,6 +1065,10 @@ static UINT8 StartAudioDevice(void)
 	opts->sampleRate = genOpts.smplRate;
 	opts->numChannels = 2;
 	opts->numBitsPerSmpl = 16;
+	if (genOpts.audBufTime)
+		opts->usecPerBuf = genOpts.audBufTime * 1000;
+	if (genOpts.audBufCnt)
+		opts->numBuffers = genOpts.audBufCnt;
 	smplSize = opts->numChannels * opts->numBitsPerSmpl / 8;
 	smplAlloc = opts->sampleRate / 4;
 	localBufSize = smplAlloc * smplSize;

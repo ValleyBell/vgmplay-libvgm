@@ -6,6 +6,15 @@
 
 #define PLAYSTATE_FADE	0x10	// is fading
 
+struct PlrWrapConfig
+{
+	INT32 masterVol;	// master volume (16.16 fixed point)
+	UINT8 chnInvert;	// channel phase inversion (bit 0 - left, bit 1 - right)
+	UINT32 loopCount;
+	UINT32 fadeSmpls;
+	double pbSpeed;
+};
+
 class PlayerWrapper
 {
 public:
@@ -24,7 +33,9 @@ public:
 	void SetLoopCount(UINT32 loops);
 	UINT32 GetFadeTime(void) const;
 	void SetFadeTime(UINT32 smplCnt);
-	
+	const PlrWrapConfig& GetConfiguration(void) const;
+	void SetConfiguration(const PlrWrapConfig& config);
+
 	void SetCallback(PLAYER_EVENT_CB cbFunc, void* cbParam);
 	UINT8 GetState(void) const;
 	UINT32 GetCurPos(UINT8 unit) const;
@@ -51,9 +62,7 @@ private:
 	
 	std::vector<PlayerBase*> _avbPlrs;	// available players
 	UINT32 _smplRate;
-	double _pbSpeed;
-	UINT32 _loopCount;
-	UINT32 _fadeSmpls;
+	PlrWrapConfig _config;
 	PLAYER_EVENT_CB _plrCbFunc;
 	void* _plrCbParam;
 	UINT8 _myPlayState;
@@ -65,6 +74,5 @@ private:
 	PlayerBase* _player;
 	DATA_LOADER* _dLoad;
 	UINT32 _fadeSmplStart;
-	UINT32 _masterVol;
 };
 
