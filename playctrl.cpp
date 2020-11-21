@@ -110,6 +110,7 @@ static bool dummyRenderAtLoad = false;
 static volatile UINT8 playState;
 
 static INT8 timeDispMode = 0;
+static bool isRawLog;
 static UINT32 fileSize;
 
 extern Configuration playerCfg;
@@ -355,6 +356,7 @@ static void ShowSongInfo(const std::string& fileName)
 	
 	INT16 volGain = 0x00;
 	player->GetSongInfo(sInf);
+	isRawLog = false;	// TODO: set this variable in another function
 	if (player->GetPlayerType() == FCC_VGM)
 	{
 		VGMPlayer* vgmplay = dynamic_cast<VGMPlayer*>(player);
@@ -363,6 +365,13 @@ static void ShowSongInfo(const std::string& fileName)
 		sprintf(verStr, "VGM %X.%02X", (vgmhdr->fileVer >> 8) & 0xFF, (vgmhdr->fileVer >> 0) & 0xFF);
 		volGain = vgmhdr->volumeGain;
 		fileSize = vgmplay->GetFileHeader()->dataEnd;
+		
+		// RAW Log: no loop, no/empty Creator tag, System Name IS set
+		if (! vgmhdr->loopOfs && tags.find("ENCODED_BY") == tags.end() &&
+			tags.find("SYSTEM") != tags.end())
+			isRawLog = true;
+		if (! vgmhdr->numTicks)
+			isRawLog = false;
 	}
 	else if (player->GetPlayerType() == FCC_S98)
 	{
@@ -377,6 +386,7 @@ static void ShowSongInfo(const std::string& fileName)
 		const DRO_HEADER* drohdr = droplay->GetFileHeader();
 		
 		sprintf(verStr, "DRO v%u", drohdr->verMajor);	// DRO has a "verMinor" field, but it's always 0
+		isRawLog = true;
 	}
 	
 	if (genOpts.setTermTitle)
@@ -561,6 +571,19 @@ static UINT8 PlayFile(void)
 			needRefresh = true;
 			if (retVal >= 0x10)
 				break;
+		}
+		
+		if (genOpts.fadeRawLogs && isRawLog && genOpts.fadeTime_single > 0)
+		{
+			if (! (playState & PLAYSTATE_PAUSE) && ! (myPlayer.GetState() & PLAYSTATE_FADE))
+			{
+				double fadeStart = myPlayer.GetTotalTime(1) - genOpts.fadeTime_single / 1500.0;
+				if (myPlayer.GetCurTime(1) >= fadeStart)
+				{
+					myPlayer.SetFadeTime(genOpts.fadeTime_single * myPlayer.GetSampleRate() / 1000);
+					myPlayer.FadeOut();	// (FadeTime / 1500) ends at 33%
+				}
+			}
 		}
 	}
 #ifndef _WIN32
