@@ -5,6 +5,7 @@
 #include <player/playerbase.hpp>
 
 #define PLAYSTATE_FADE	0x10	// is fading
+#define PLAYSTATE_FIN	0x20	// finished playing (file end + fading + trailing silence)
 
 struct PlrWrapConfig
 {
@@ -12,6 +13,7 @@ struct PlrWrapConfig
 	UINT8 chnInvert;	// channel phase inversion (bit 0 - left, bit 1 - right)
 	UINT32 loopCount;
 	UINT32 fadeSmpls;
+	UINT32 endSilenceSmpls;
 	double pbSpeed;
 };
 
@@ -31,8 +33,10 @@ public:
 	void SetPlaybackSpeed(double speed);
 	UINT32 GetLoopCount(void) const;
 	void SetLoopCount(UINT32 loops);
-	UINT32 GetFadeTime(void) const;
-	void SetFadeTime(UINT32 smplCnt);
+	UINT32 GetFadeSamples(void) const;
+	void SetFadeSamples(UINT32 smplCnt);
+	UINT32 GetEndSilenceSamples(void) const;
+	void SetEndSilenceSamples(UINT32 smplCnt);
 	const PlrWrapConfig& GetConfiguration(void) const;
 	void SetConfiguration(const PlrWrapConfig& config);
 
@@ -56,7 +60,6 @@ public:
 private:
 	void FindPlayerEngine(void);
 	INT32 CalcCurrentVolume(UINT32 playbackSmpl);
-	UINT32 FillBuffer(void* drvStruct, void* userParam, UINT32 bufSize, void* data);
 	static UINT8 PlayCallbackS(PlayerBase* player, void* userParam, UINT8 evtType, void* evtParam);
 	UINT8 PlayCallback(PlayerBase* player, UINT8 evtType, void* evtParam);
 	
@@ -74,5 +77,6 @@ private:
 	PlayerBase* _player;
 	DATA_LOADER* _dLoad;
 	UINT32 _fadeSmplStart;
+	UINT32 _endSilenceStart;
 };
 

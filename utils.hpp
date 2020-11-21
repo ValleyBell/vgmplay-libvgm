@@ -3,7 +3,6 @@
 
 #include <vector>
 #include <string>
-#include <iconv.h>	// for iconv_t
 
 #ifdef _WIN32
 // undefine some Windows API macros

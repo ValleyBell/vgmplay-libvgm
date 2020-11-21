@@ -23,7 +23,7 @@ extern "C" int __cdecl _kbhit(void);
 #endif
 
 #include <stdtype.h>
-#include <common_def.h>
+#include <common_def.h>	// for INLINE
 #include <utils/DataLoader.h>
 #include <utils/FileLoader.h>
 #include <utils/MemoryLoader.h>
@@ -55,7 +55,7 @@ struct AudioDriver
 };
 
 
-UINT8 PlayerMain(void);
+UINT8 PlayerMain(UINT8 showFileName);
 static UINT8 OpenFile(const std::string& fileName, DATA_LOADER*& dLoad, PlayerBase*& player);
 static const char* GetTagForDisp(const std::map<std::string, std::string>& tags, const std::string& tagName);
 static void ShowSongInfo(const std::string& fileName);
@@ -125,6 +125,11 @@ static size_t curSong;
 static GeneralOptions genOpts;
 static ChipOptions chipOpts[0x100];
 static PlayerWrapper myPlayer;
+
+INLINE UINT32 MSec2Samples(UINT32 val, const PlayerWrapper& player)
+{
+	return (UINT32)(((UINT64)val * player.GetSampleRate() + 500) / 1000);
+}
 
 UINT8 PlayerMain(UINT8 showFileName)
 {
@@ -210,10 +215,14 @@ UINT8 PlayerMain(UINT8 showFileName)
 		}
 		
 		if (curSong + 1 == songList.size())
-			myPlayer.SetFadeTime(genOpts.fadeTime_single * myPlayer.GetSampleRate() / 1000);
+			myPlayer.SetFadeSamples(MSec2Samples(genOpts.fadeTime_single, myPlayer));
 		else
-			myPlayer.SetFadeTime(genOpts.fadeTime_plist * myPlayer.GetSampleRate() / 1000);
-		
+			myPlayer.SetFadeSamples(MSec2Samples(genOpts.fadeTime_plist, myPlayer));
+		if (myPlayer.GetPlayer()->GetLoopTicks() == 0)
+			myPlayer.SetEndSilenceSamples(MSec2Samples(genOpts.pauseTime_jingle, myPlayer));
+		else
+			myPlayer.SetEndSilenceSamples(MSec2Samples(genOpts.pauseTime_loop, myPlayer));
+
 		// call "start" before showing song info, so that we can get the sound cores
 		myPlayer.Start();
 		fileSize = DataLoader_GetSize(dLoad);
@@ -550,6 +559,8 @@ static UINT8 PlayFile(void)
 			
 			if (playState & PLAYSTATE_PAUSE)
 				pState = "Paused ";
+			else if (myPlayer.GetState() & PLAYSTATE_END)
+				pState = "Finish ";
 			else if (myPlayer.GetState() & PLAYSTATE_FADE)
 				pState = "Fading ";
 			else
@@ -590,7 +601,7 @@ static UINT8 PlayFile(void)
 				double fadeStart = myPlayer.GetTotalTime(1) - genOpts.fadeTime_single / 1500.0;
 				if (myPlayer.GetCurTime(1) >= fadeStart)
 				{
-					myPlayer.SetFadeTime(genOpts.fadeTime_single * myPlayer.GetSampleRate() / 1000);
+					myPlayer.SetFadeSamples(MSec2Samples(genOpts.fadeTime_single, myPlayer));
 					myPlayer.FadeOut();	// (FadeTime / 1500) ends at 33%
 				}
 			}
@@ -754,7 +765,11 @@ static UINT8 HandleKeyPress(void)
 	case ' ':
 	case 'P':	// pause
 		playState ^= PLAYSTATE_PAUSE;
-		if (adOut.data != NULL)
+		/*if (genOpts.soundWhilePaused)
+		{
+			// TODO
+		}
+		else*/ if (adOut.data != NULL)
 		{
 			if (playState & PLAYSTATE_PAUSE)
 				AudioDrv_Pause(adOut.data);
@@ -764,7 +779,7 @@ static UINT8 HandleKeyPress(void)
 		break;
 	case 'F':	// fade out
 		// enforce "non-playlist" fade-out
-		myPlayer.SetFadeTime(genOpts.fadeTime_single * myPlayer.GetSampleRate() / 1000);
+		myPlayer.SetFadeSamples(MSec2Samples(genOpts.fadeTime_single, myPlayer));
 		myPlayer.FadeOut();
 		break;
 	case 'R':	// restart

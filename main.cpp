@@ -148,7 +148,6 @@ int main(int argc, char* argv[])
 	if (cfgFilePath.empty())
 		printf("%s not found - falling back to defaults.\n", cfgFileNames[cfgFileNames.size() - 1].c_str());
 	
-	// TODO: load default configuration here?
 	if (! cfgFilePath.empty())
 	{
 		LoadConfig(cfgFilePath, playerCfg);	// load INI file

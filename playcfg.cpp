@@ -12,6 +12,7 @@
 #endif
 
 #include <stdtype.h>
+#include <common_def.h>	// for INLINE
 #include <player/playerbase.hpp>
 #include <player/s98player.hpp>
 #include <player/droplayer.hpp>
@@ -32,6 +33,11 @@
 
 
 #define BIT_MASK(startBit, bitCnt)	(((1 << bitCnt) - 1) << startBit)
+
+INLINE UINT32 MulDivRoundU32(UINT32 val, UINT32 mul, UINT32 div)
+{
+	return (UINT32)(((UINT64)val * mul + (div / 2)) / div);
+}
 
 
 //void ParseConfiguration(GeneralOptions& gOpts, size_t cOptCnt, ChipOptions* cOpts, const Configuration& cfg);
@@ -473,7 +479,7 @@ static void ParseCfg_ChipSection(ChipOptions& opts, const CfgSection& cfg, UINT8
 			break;
 		case DEVID_AY8910:
 			if (emuType == 0)
-				opts.emuCore = FCC_ADLE;
+				opts.emuCore = FCC_EMU_;
 			else if (emuType == 1)
 				opts.emuCore = FCC_MAME;
 			break;
@@ -557,7 +563,8 @@ void ApplyCfg_General(PlayerWrapper& player, const GeneralOptions& opts)
 	pwCfg.masterVol = (INT32)(0x10000 * opts.volume + 0.5);
 	pwCfg.chnInvert = opts.pseudoSurround ? 0x02 : 0x00;
 	pwCfg.loopCount = opts.maxLoops;
-	pwCfg.fadeSmpls = opts.fadeTime_single * opts.smplRate / 1000;
+	pwCfg.fadeSmpls = MulDivRoundU32(opts.fadeTime_single, opts.smplRate, 1000);
+	pwCfg.endSilenceSmpls = MulDivRoundU32(opts.pauseTime_jingle, opts.smplRate, 1000);
 	pwCfg.pbSpeed = 1.0;
 	player.SetConfiguration(pwCfg);
 	

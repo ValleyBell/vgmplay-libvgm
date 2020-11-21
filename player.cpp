@@ -16,6 +16,8 @@ PlayerWrapper::PlayerWrapper()
 	_config.chnInvert = 0x00;
 	_config.loopCount = 2;
 	_config.fadeSmpls = 0;
+	_config.endSilenceSmpls = 0;
+	_config.pbSpeed = 1.0;
 	return;
 }
 
@@ -91,14 +93,25 @@ void PlayerWrapper::SetLoopCount(UINT32 loops)
 	return;
 }
 
-UINT32 PlayerWrapper::GetFadeTime(void) const
+UINT32 PlayerWrapper::GetFadeSamples(void) const
 {
 	return _config.fadeSmpls;
 }
 
-void PlayerWrapper::SetFadeTime(UINT32 smplCnt)
+void PlayerWrapper::SetFadeSamples(UINT32 smplCnt)
 {
 	_config.fadeSmpls = smplCnt;
+	return;
+}
+
+UINT32 PlayerWrapper::GetEndSilenceSamples(void) const
+{
+	return _config.endSilenceSmpls;
+}
+
+void PlayerWrapper::SetEndSilenceSamples(UINT32 smplCnt)
+{
+	_config.endSilenceSmpls = smplCnt;
 	return;
 }
 
@@ -129,7 +142,6 @@ UINT8 PlayerWrapper::GetState(void) const
 	if (_player == NULL)
 		return 0x00;
 	UINT8 finalState = _myPlayState;
-	finalState |= _player->GetState();
 	if (_fadeSmplStart != (UINT32)-1)
 		finalState |= PLAYSTATE_FADE;
 	return finalState;
@@ -236,6 +248,7 @@ UINT8 PlayerWrapper::Start(void)
 	_player->SetSampleRate(_smplRate);
 	_player->SetPlaybackSpeed(_config.pbSpeed);
 	_fadeSmplStart = (UINT32)-1;
+	_endSilenceStart = (UINT32)-1;
 	
 	UINT8 retVal = _player->Start();
 	_myPlayState = _player->GetState() & (PLAYSTATE_PLAY | PLAYSTATE_END);
@@ -248,6 +261,7 @@ UINT8 PlayerWrapper::Stop(void)
 		return 0xFF;
 	UINT8 retVal = _player->Stop();
 	_myPlayState = _player->GetState() & (PLAYSTATE_PLAY | PLAYSTATE_END);
+	_myPlayState |= PLAYSTATE_FIN;
 	return retVal;
 }
 
@@ -256,6 +270,7 @@ UINT8 PlayerWrapper::Reset(void)
 	if (_player == NULL)
 		return 0xFF;
 	_fadeSmplStart = (UINT32)-1;
+	_endSilenceStart = (UINT32)-1;
 	UINT8 retVal = _player->Reset();
 	_myPlayState = _player->GetState() & (PLAYSTATE_PLAY | PLAYSTATE_END);
 	return retVal;
@@ -273,10 +288,14 @@ UINT8 PlayerWrapper::Seek(UINT8 unit, UINT32 pos)
 {
 	if (_player == NULL)
 		return 0xFF;
-	_myPlayState = 0x00;
 	UINT8 retVal = _player->Seek(unit, pos);
-	if (_player->GetCurPos(PLAYPOS_SAMPLE) < _fadeSmplStart)
+	_myPlayState = _player->GetState() & (PLAYSTATE_PLAY | PLAYSTATE_END);
+	
+	UINT32 pbSmpl = _player->GetCurPos(PLAYPOS_SAMPLE);
+	if (pbSmpl < _fadeSmplStart)
 		_fadeSmplStart = (UINT32)-1;
+	if (pbSmpl < _endSilenceStart)
+		_endSilenceStart = (UINT32)-1;
 	return retVal;
 }
 
@@ -363,13 +382,23 @@ UINT32 PlayerWrapper::Render(UINT32 bufSize, void* data)
 			UINT32 fadeSmpls = basePbSmpl - _fadeSmplStart;
 			if (fadeSmpls >= _config.fadeSmpls && ! (_myPlayState & PLAYSTATE_END))
 			{
+				if (_endSilenceStart = (UINT32)-1)
+					_endSilenceStart = basePbSmpl;
 				_myPlayState |= PLAYSTATE_END;
+			}
+			
+			curVolume = CalcCurrentVolume(basePbSmpl) >> VOL_SHIFT;
+		}
+		if (basePbSmpl >= _endSilenceStart)
+		{
+			UINT32 silenceSmpls = basePbSmpl - _endSilenceStart;
+			if (silenceSmpls >= _config.endSilenceSmpls && ! (_myPlayState & PLAYSTATE_FIN))
+			{
+				_myPlayState |= PLAYSTATE_FIN;
 				if (_plrCbFunc != NULL)
 					_plrCbFunc(_player, _plrCbParam, PLREVT_END, NULL);
 				break;
 			}
-			
-			curVolume = CalcCurrentVolume(basePbSmpl) >> VOL_SHIFT;
 		}
 		
 		// Input is about 24 bits (some cores might output a bit more)
@@ -415,10 +444,13 @@ UINT8 PlayerWrapper::PlayCallback(PlayerBase* player, UINT8 evtType, void* evtPa
 {
 	UINT8 retVal = 0x00;
 	
-	if (_plrCbFunc != NULL)
-		retVal = _plrCbFunc(player, _plrCbParam, evtType, evtParam);
-	if (retVal)
-		return retVal;
+	if (evtType != PLREVT_END)	// We will generate our own PLREVT_END event depending on fading/endSilence.
+	{
+		if (_plrCbFunc != NULL)
+			retVal = _plrCbFunc(player, _plrCbParam, evtType, evtParam);
+		if (retVal)
+			return retVal;
+	}
 	
 	switch(evtType)
 	{
@@ -430,15 +462,15 @@ UINT8 PlayerWrapper::PlayCallback(PlayerBase* player, UINT8 evtType, void* evtPa
 			UINT32* curLoop = (UINT32*)evtParam;
 			if (_config.loopCount > 0 && *curLoop >= _config.loopCount)
 			{
-				if (_config.fadeSmpls == 0)
-					return 0x01;	// send "stop" signal to player engine
-				if (_fadeSmplStart == (UINT32)-1)
-					_fadeSmplStart = player->GetCurPos(PLAYPOS_SAMPLE);
+				//if (_config.fadeSmpls == 0)
+				//	return 0x01;	// send "stop" signal to player engine
+				_fadeSmplStart = player->GetCurPos(PLAYPOS_SAMPLE);
 			}
 		}
 		break;
 	case PLREVT_END:
 		_myPlayState |= PLAYSTATE_END;
+		_endSilenceStart = player->GetCurPos(PLAYPOS_SAMPLE);
 		break;
 	}
 	return 0x00;
