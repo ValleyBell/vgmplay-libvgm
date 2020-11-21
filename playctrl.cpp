@@ -64,7 +64,7 @@ static UINT8 PlayFile(void);
 static int GetPressedKey(void);
 static UINT8 HandleKeyPress(void);
 static inline std::string FCC2Str(UINT32 fcc);
-static INT8 GetTimePrintMode(double seconds);
+static INT8 GetTimeDispMode(double seconds);
 static std::string GetTimeStr(double seconds, INT8 showHours = 0);
 static UINT32 FillBuffer(void* drvStruct, void* userParam, UINT32 bufSize, void* Data);
 static UINT32 FillBufferDummy(void* drvStruct, void* userParam, UINT32 bufSize, void* data);
@@ -109,7 +109,7 @@ static bool manualRenderLoop = false;
 static bool dummyRenderAtLoad = false;
 static volatile UINT8 playState;
 
-static INT8 PrintMSHours = 0;
+static INT8 timeDispMode = 0;
 static UINT32 fileSize;
 
 extern Configuration playerCfg;
@@ -215,7 +215,7 @@ UINT8 PlayerMain(UINT8 showFileName)
 		myPlayer.Start();
 		fileSize = DataLoader_GetSize(dLoad);
 		
-		PrintMSHours = GetTimePrintMode(myPlayer.GetTotalTime(0));
+		timeDispMode = GetTimeDispMode(myPlayer.GetTotalTime(0));
 		ShowSongInfo(sfl.fileName);
 		PlayFile();
 		
@@ -539,8 +539,8 @@ static UINT8 PlayFile(void)
 				pState = "Playing";
 			printf("%s%6.2f%%  %s / %s seconds  \r", pState,
 					100.0 * myPlayer.GetCurPos(PLAYPOS_FILEOFS) / fileSize,
-					GetTimeStr(myPlayer.GetCurTime(0), PrintMSHours).c_str(),
-					GetTimeStr(myPlayer.GetTotalTime(0), PrintMSHours).c_str());
+					GetTimeStr(myPlayer.GetCurTime(0), timeDispMode).c_str(),
+					GetTimeStr(myPlayer.GetTotalTime(0), timeDispMode).c_str());
 			fflush(stdout);
 			needRefresh = false;
 		}
@@ -810,7 +810,7 @@ static inline std::string FCC2Str(UINT32 fcc)
 	return result;
 }
 
-static INT8 GetTimePrintMode(double seconds)
+static INT8 GetTimeDispMode(double seconds)
 {
 	UINT32 csec;
 	UINT32 sec;

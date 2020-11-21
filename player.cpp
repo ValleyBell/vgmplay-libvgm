@@ -295,9 +295,9 @@ UINT8 PlayerWrapper::Seek(UINT8 unit, UINT32 pos)
 #define VOL_PRESH	4	// sample data pre-shift
 #define VOL_POSTSH	(VOL_BITS - VOL_PRESH)	// post-shift after volume multiplication
 
-UINT32 PlayerWrapper::CalcCurrentVolume(UINT32 playbackSmpl)
+INT32 PlayerWrapper::CalcCurrentVolume(UINT32 playbackSmpl)
 {
-	UINT32 curVol;	// 16.16 fixed point
+	INT32 curVol;	// 16.16 fixed point
 	
 	// 1. master volume
 	curVol = _config.masterVol;
@@ -315,7 +315,7 @@ UINT32 PlayerWrapper::CalcCurrentVolume(UINT32 playbackSmpl)
 		fadeVol = (UINT64)fadeSmpls * 0x10000 / _config.fadeSmpls;
 		fadeVol = 0x10000 - fadeVol;	// fade from full volume to silence
 		fadeVol = fadeVol * fadeVol;	// logarithmic fading sounds nicer
-		curVol = (UINT32)((fadeVol * curVol) >> 32);
+		curVol = (INT32)(((INT64)fadeVol * curVol) >> 32);
 	}
 	
 	return curVol;
@@ -354,7 +354,7 @@ UINT32 PlayerWrapper::Render(UINT32 bufSize, void* data)
 	smplRendered = _player->Render(smplCount, &_smplBuf[0]);
 	smplCount = smplRendered;
 	
-	curVolume = (INT32)CalcCurrentVolume(basePbSmpl) >> VOL_SHIFT;
+	curVolume = CalcCurrentVolume(basePbSmpl) >> VOL_SHIFT;
 	SmplPtr16 = (INT16*)data;
 	for (curSmpl = 0; curSmpl < smplCount; curSmpl ++, basePbSmpl ++, SmplPtr16 += 2)
 	{
@@ -369,7 +369,7 @@ UINT32 PlayerWrapper::Render(UINT32 bufSize, void* data)
 				break;
 			}
 			
-			curVolume = (INT32)CalcCurrentVolume(basePbSmpl) >> VOL_SHIFT;
+			curVolume = CalcCurrentVolume(basePbSmpl) >> VOL_SHIFT;
 		}
 		
 		// Input is about 24 bits (some cores might output a bit more)

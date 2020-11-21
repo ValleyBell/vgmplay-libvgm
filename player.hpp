@@ -8,7 +8,7 @@
 
 struct PlrWrapConfig
 {
-	INT32 masterVol;	// master volume (16.16 fixed point)
+	INT32 masterVol;	// master volume (16.16 fixed point, negative value = phase inversion)
 	UINT8 chnInvert;	// channel phase inversion (bit 0 - left, bit 1 - right)
 	UINT32 loopCount;
 	UINT32 fadeSmpls;
@@ -55,7 +55,7 @@ public:
 	UINT32 Render(UINT32 bufSize, void* data);
 private:
 	void FindPlayerEngine(void);
-	UINT32 CalcCurrentVolume(UINT32 playbackSmpl);
+	INT32 CalcCurrentVolume(UINT32 playbackSmpl);
 	UINT32 FillBuffer(void* drvStruct, void* userParam, UINT32 bufSize, void* data);
 	static UINT8 PlayCallbackS(PlayerBase* player, void* userParam, UINT8 evtType, void* evtParam);
 	UINT8 PlayCallback(PlayerBase* player, UINT8 evtType, void* evtParam);
