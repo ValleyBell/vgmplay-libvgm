@@ -75,6 +75,8 @@ static UINT8 InitAudioSystem(void);
 static UINT8 DeinitAudioSystem(void);
 static UINT8 StartAudioDevice(void);
 static UINT8 StopAudioDevice(void);
+static UINT8 StartDiskWriter(const std::string& songFileName);
+static UINT8 StopDiskWriter(void);
 #ifndef _WIN32
 static void changemode(UINT8 noEcho);
 static int _kbhit(void);
@@ -218,7 +220,12 @@ UINT8 PlayerMain(UINT8 showFileName)
 		
 		timeDispMode = GetTimeDispMode(myPlayer.GetTotalTime(0));
 		ShowSongInfo(sfl.fileName);
+		
+		retVal = StartDiskWriter(sfl.fileName);
+		if (retVal)
+			printf("Warning: File writer failed with error 0x%02X\n", retVal);
 		PlayFile();
+		StopDiskWriter();
 		
 		myPlayer.Stop();
 		
@@ -557,8 +564,11 @@ static UINT8 PlayFile(void)
 		
 		if (manualRenderLoop && ! (playState & PLAYSTATE_PAUSE))
 		{
-			UINT32 wrtBytes = FillBuffer(adOut.data, &myPlayer, audioBuf.size(), &audioBuf[0]);
-			AudioDrv_WriteData(adOut.data, wrtBytes, &audioBuf[0]);
+			UINT32 wrtBytes = FillBuffer(NULL, &myPlayer, audioBuf.size(), &audioBuf[0]);
+			if (adOut.data != NULL)
+				AudioDrv_WriteData(adOut.data, wrtBytes, &audioBuf[0]);
+			else if (adLog.data != NULL)
+				AudioDrv_WriteData(adLog.data, wrtBytes, &audioBuf[0]);
 		}
 		else
 		{
@@ -1016,44 +1026,99 @@ static UINT8 InitAudioSystem(void)
 {
 	AUDDRV_INFO* drvInfo;
 	UINT8 retVal;
+	UINT8 drvEnable;
 	
-	retVal = OSMutex_Init(&renderMtx, 0);
+	// mode 0: output to speakers (mask 01)
+	// mode 1: write to file (mask 02)
+	// mode 2: do both (mask 03)
+	if (genOpts.pbMode <= 2)
+		drvEnable = 0x01 + genOpts.pbMode;
+	else
+		drvEnable = 0x00;
 	
 	printf("Opening Audio Device ...\n");
 	retVal = Audio_Init();
 	if (retVal == AERR_NODRVS)
 		return retVal;
 	
-	adOut.dTypeID = (INT32)genOpts.audDriverID;
-	adOut.dTypeName = genOpts.audDriverName;
-	adOut.deviceID = genOpts.audOutDev;
-
-	retVal = ChooseAudioDriver(&adOut);
-	if (retVal == 0x01)
+	// --- setup output to speakers ---
+	if (drvEnable & 0x01)
 	{
+		adOut.dTypeID = (INT32)genOpts.audDriverID;
+		adOut.dTypeName = genOpts.audDriverName;
+		adOut.deviceID = (INT32)genOpts.audOutDev;
+		if (adOut.dTypeID == -1 && adOut.dTypeName.empty())
+		{
 #ifdef _WIN32
-		adOut.dTypeID = 0;	// on Windows, fall back to first driver (usually WinMM)
+			adOut.dTypeID = 0;	// on Windows, fall back to first driver (usually WinMM)
 #else
-		adOut.dTypeID = -2;	// on Linux, fall back to last driver (usually PulseAudio)
+			adOut.dTypeID = -2;	// on Linux, fall back to last driver (usually PulseAudio)
 #endif
-		retVal = ChooseAudioDriver(&adOut);
+		}
 	}
-	if (retVal)
+	else
+	{
+		adOut.dTypeID = -1;
+		adOut.dTypeName = "";
+	}
+	retVal = ChooseAudioDriver(&adOut);
+	if (retVal & 0x80)
 	{
 		fprintf(stderr, "Requested audio output driver not found!\n");
 		Audio_Deinit();
 		return AERR_NODRVS;
 	}
-	
-	Audio_GetDriverInfo(adOut.driverID, &drvInfo);
-	printf("Using driver %s.\n", drvInfo->drvName);
-	retVal = InitAudioDriver(&adOut);
-	if (retVal)
+	if (adOut.driverID != -1)
 	{
-		fprintf(stderr, "Audio Driver Init Error: %02X\n", retVal);
-		Audio_Deinit();
-		return retVal;
+		Audio_GetDriverInfo(adOut.driverID, &drvInfo);
+		printf("Using driver %s.\n", drvInfo->drvName);
+		retVal = InitAudioDriver(&adOut);
+		if (retVal)
+		{
+			fprintf(stderr, "Audio Driver Init Error: %02X\n", retVal);
+			Audio_Deinit();
+			return retVal;
+		}
 	}
+	
+	// --- setup output to file ---
+	if (drvEnable & 0x02)
+	{
+		adLog.dTypeID = 0;
+		adLog.deviceID = 0;
+	}
+	else
+	{
+		adLog.dTypeID = -1;
+		adLog.dTypeName = "";
+	}
+	retVal = ChooseAudioDriver(&adLog);
+	if (retVal & 0x80)
+	{
+		fprintf(stderr, "Requested file writer driver not found!\n");
+		if (adOut.data == NULL)	// cancel only when not playing back
+		{
+			Audio_Deinit();
+			return AERR_NODRVS;
+		}
+	}
+	if (adLog.driverID != -1)
+	{
+		Audio_GetDriverInfo(adLog.driverID, &drvInfo);
+		printf("Using file writer driver %s.\n", drvInfo->drvName);
+		retVal = InitAudioDriver(&adLog);
+		if (retVal)
+		{
+			fprintf(stderr, "Audio Driver Init Error: %02X\n", retVal);
+			if (adOut.data == NULL)	// cancel only when not playing back
+			{
+				Audio_Deinit();
+				return retVal;
+			}
+		}
+	}
+
+	retVal = OSMutex_Init(&renderMtx, 0);
 	
 	return AERR_OK;
 }
@@ -1063,8 +1128,14 @@ static UINT8 DeinitAudioSystem(void)
 	UINT8 retVal;
 	
 	retVal = 0x00;
+	if (adLog.data != NULL)
+	{
+		AudioDrv_Deinit(&adLog.data);	adLog.data = NULL;
+	}
 	if (adOut.data != NULL)
-		retVal = AudioDrv_Deinit(&adOut.data);
+	{
+		retVal = AudioDrv_Deinit(&adOut.data);	adOut.data = NULL;
+	}
 	Audio_Deinit();
 	
 	OSMutex_Deinit(renderMtx);	renderMtx = NULL;
@@ -1083,6 +1154,8 @@ static UINT8 StartAudioDevice(void)
 	opts = NULL;
 	if (adOut.data != NULL)
 		opts = AudioDrv_GetOptions(adOut.data);
+	else if (adLog.data != NULL)
+		opts = AudioDrv_GetOptions(adLog.data);
 	if (opts == NULL)
 		return 0xFF;
 	opts->sampleRate = genOpts.smplRate;
@@ -1107,9 +1180,13 @@ static UINT8 StartAudioDevice(void)
 		}
 		
 		smplAlloc = AudioDrv_GetBufferSize(adOut.data) / smplSize;
+		if (AudioDrv_SetCallback(adOut.data, NULL, NULL) == AERR_OK)
+			localBufSize = 0;	// we don't need a local buffer when the audio driver itself comes with one
 	}
-	if (AudioDrv_SetCallback(adOut.data, NULL, NULL) == AERR_OK)
-		localBufSize = 0;	// we don't need a local buffer when the audio driver itself comes with one
+	else if (adLog.data != NULL)
+	{
+		smplAlloc = opts->sampleRate / 4;
+	}
 	
 	audioBuf.resize(localBufSize);
 	myPlayer.PrepareRendering(opts, smplAlloc);
@@ -1127,6 +1204,45 @@ static UINT8 StopAudioDevice(void)
 	audioBuf.clear();
 	
 	return retVal;
+}
+
+static UINT8 StartDiskWriter(const std::string& songFileName)
+{
+	if (adLog.data == NULL)
+		return 0x00;
+	
+	std::string outFName;
+	const char* extPtr;
+	UINT8 retVal;
+	
+	if (adOut.data != NULL)
+	{
+		AUDIO_OPTS* optsOut = AudioDrv_GetOptions(adOut.data);
+		AUDIO_OPTS* optsLog = AudioDrv_GetOptions(adLog.data);
+		*optsLog = *optsOut;
+	}
+	
+	extPtr = GetFileExtension(songFileName.c_str());
+	outFName = (extPtr != NULL) ? std::string(songFileName.c_str(), extPtr - 1) : songFileName;
+	outFName += ".wav";
+	
+	//outFName = std::string("R:/") + GetFileTitle(outFName.c_str());
+	
+	WavWrt_SetFileName(AudioDrv_GetDrvData(adLog.data), outFName.c_str());
+	retVal = AudioDrv_Start(adLog.data, 0);
+	if (! retVal && adOut.data != NULL)
+		AudioDrv_DataForward_Add(adOut.data, adLog.data);
+	return retVal;
+}
+
+static UINT8 StopDiskWriter(void)
+{
+	if (adLog.data == NULL)
+		return 0x00;
+	
+	if (adOut.data != NULL)
+		AudioDrv_DataForward_Remove(adOut.data, adLog.data);
+	return AudioDrv_Stop(adLog.data);
 }
 
 
