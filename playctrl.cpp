@@ -69,6 +69,7 @@ static std::string GetTimeStr(double seconds, INT8 showHours = 0);
 static UINT32 FillBuffer(void* drvStruct, void* userParam, UINT32 bufSize, void* Data);
 static UINT32 FillBufferDummy(void* drvStruct, void* userParam, UINT32 bufSize, void* data);
 static UINT8 FilePlayCallback(PlayerBase* player, void* userParam, UINT8 evtType, void* evtParam);
+static DATA_LOADER* PlayerFileReqCallback(void* userParam, PlayerBase* player, const char* fileName);
 static UINT8 ChooseAudioDriver(AudioDriver* aDrv);
 static UINT8 InitAudioDriver(AudioDriver* aDrv);
 static UINT8 InitAudioSystem(void);
@@ -115,6 +116,7 @@ static INT8 timeDispMode = 0;
 static bool isRawLog;
 static UINT32 fileSize;
 
+extern std::vector<std::string> appSearchPaths;
 extern Configuration playerCfg;
 extern std::vector<SongFileList> songList;
 extern std::vector<PlaylistFileList> plList;
@@ -159,7 +161,8 @@ UINT8 PlayerMain(UINT8 showFileName)
 	myPlayer.RegisterPlayerEngine(new VGMPlayer);
 	myPlayer.RegisterPlayerEngine(new S98Player);
 	myPlayer.RegisterPlayerEngine(new DROPlayer);
-	myPlayer.SetCallback(&FilePlayCallback, NULL);
+	myPlayer.SetEventCallback(FilePlayCallback, NULL);
+	myPlayer.SetFileReqCallback(&PlayerFileReqCallback, NULL);
 	ApplyCfg_General(myPlayer, genOpts);
 	for (size_t curChp = 0; curChp < 0x100; curChp ++)
 	{
@@ -948,6 +951,21 @@ static UINT8 FilePlayCallback(PlayerBase* player, void* userParam, UINT8 evtType
 		break;
 	}
 	return 0x00;
+}
+
+static DATA_LOADER* PlayerFileReqCallback(void* userParam, PlayerBase* player, const char* fileName)
+{
+	std::string filePath = FindFile_Single(fileName, appSearchPaths);
+	//printf("Player requested file - found at %s\n", filePath.c_str());
+	if (filePath.empty())
+		return NULL;
+	
+	DATA_LOADER* dLoad = FileLoader_Init(filePath.c_str());
+	UINT8 retVal = DataLoader_Load(dLoad);
+	if (! retVal)
+		return dLoad;
+	DataLoader_Deinit(dLoad);
+	return NULL;
 }
 
 static UINT8 ChooseAudioDriver(AudioDriver* aDrv)

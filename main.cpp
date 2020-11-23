@@ -87,7 +87,7 @@ static const OptionItem OPT_LIST_ARR[] =
 static const size_t OPT_LIST_SIZE = sizeof(OPT_LIST_ARR) / sizeof(OPT_LIST_ARR[0]);
 
 
-static std::vector<std::string> appSearchPaths;
+       std::vector<std::string> appSearchPaths;
 static std::vector<std::string> cfgFileNames;
        Configuration playerCfg;
 

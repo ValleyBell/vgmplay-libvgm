@@ -40,7 +40,8 @@ public:
 	const PlrWrapConfig& GetConfiguration(void) const;
 	void SetConfiguration(const PlrWrapConfig& config);
 
-	void SetCallback(PLAYER_EVENT_CB cbFunc, void* cbParam);
+	void SetEventCallback(PLAYER_EVENT_CB cbFunc, void* cbParam);
+	void SetFileReqCallback(PLAYER_FILEREQ_CB cbFunc, void* cbParam);
 	UINT8 GetState(void) const;
 	UINT32 GetCurPos(UINT8 unit) const;
 	double GetCurTime(UINT8 includeLoops) const;

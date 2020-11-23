@@ -130,10 +130,17 @@ void PlayerWrapper::SetConfiguration(const PlrWrapConfig& config)
 	return;
 }
 
-void PlayerWrapper::SetCallback(PLAYER_EVENT_CB cbFunc, void* cbParam)
+void PlayerWrapper::SetEventCallback(PLAYER_EVENT_CB cbFunc, void* cbParam)
 {
 	_plrCbFunc = cbFunc;
 	_plrCbParam = cbParam;
+	return;
+}
+
+void PlayerWrapper::SetFileReqCallback(PLAYER_FILEREQ_CB cbFunc, void* cbParam)
+{
+	for (size_t curPlr = 0; curPlr < _avbPlrs.size(); curPlr ++)
+		_avbPlrs[curPlr]->SetFileReqCallback(cbFunc, cbParam);
 	return;
 }
 
@@ -222,7 +229,7 @@ UINT8 PlayerWrapper::LoadFile(DATA_LOADER* dLoad)
 	FindPlayerEngine();
 	if (_player == NULL)
 		return 0xFF;
-	_player->SetCallback(PlayerWrapper::PlayCallbackS, this);
+	_player->SetEventCallback(PlayerWrapper::PlayCallbackS, this);
 	
 	UINT8 retVal = _player->LoadFile(dLoad);
 	if (retVal >= 0x80)
