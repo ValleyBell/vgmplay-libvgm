@@ -506,7 +506,7 @@ static void ShowConsoleTitle(const std::string& fileName, const std::string& tit
 	
 	SetConsoleTitleW(titleWStr.c_str());		// Set Windows Console Title
 #else
-	printf("\x1B]0;%ls\x07", titleStr.c_str());	// Set xterm/rxvt Terminal Title
+	printf("\x1B]0;%s\x07", titleStr.c_str());	// Set xterm/rxvt Terminal Title
 #endif
 	
 	return;
@@ -514,7 +514,6 @@ static void ShowConsoleTitle(const std::string& fileName, const std::string& tit
 
 static UINT8 PlayFile(void)
 {
-	PlayerBase* player = myPlayer.GetPlayer();
 	UINT8 retVal;
 	bool needRefresh;
 	

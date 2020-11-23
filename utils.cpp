@@ -5,7 +5,9 @@
 #include <vector>
 #include <stdarg.h>
 
+#ifdef _WIN32
 #include <Windows.h>	// for WriteConsoleW etc.
+#endif
 
 #include "utils.hpp"
 

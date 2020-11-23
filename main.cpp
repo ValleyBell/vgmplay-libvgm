@@ -28,6 +28,7 @@
 #define Sleep(x)	usleep(x * 1000)
 #include <limits.h>	// for PATH_MAX
 #include <signal.h>	// for kill()
+#define MAX_PATH	PATH_MAX
 #endif
 
 #include <ini.h>

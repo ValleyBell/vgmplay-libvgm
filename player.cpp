@@ -382,7 +382,7 @@ UINT32 PlayerWrapper::Render(UINT32 bufSize, void* data)
 			UINT32 fadeSmpls = basePbSmpl - _fadeSmplStart;
 			if (fadeSmpls >= _config.fadeSmpls && ! (_myPlayState & PLAYSTATE_END))
 			{
-				if (_endSilenceStart = (UINT32)-1)
+				if (_endSilenceStart == (UINT32)-1)
 					_endSilenceStart = basePbSmpl;
 				_myPlayState |= PLAYSTATE_END;
 			}
