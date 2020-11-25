@@ -80,4 +80,3 @@ private:
 	UINT32 _fadeSmplStart;
 	UINT32 _endSilenceStart;
 };
-

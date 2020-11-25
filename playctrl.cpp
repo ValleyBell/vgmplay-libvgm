@@ -217,6 +217,15 @@ UINT8 PlayerMain(UINT8 showFileName)
 			continue;
 		}
 		
+		if (myPlayer.GetPlayer()->GetPlayerType() == FCC_VGM)
+		{
+			VGMPlayer* vgmplay = dynamic_cast<VGMPlayer*>(myPlayer.GetPlayer());
+			const VGM_HEADER* vgmhdr = vgmplay->GetFileHeader();
+			PlrWrapConfig pwCfg;
+			pwCfg = myPlayer.GetConfiguration();
+			pwCfg.masterVol = (INT32)(0x10000 * pow(2.0, vgmhdr->volumeGain / (double)0x100) * genOpts.volume + 0.5);
+			myPlayer.SetConfiguration(pwCfg);
+		}
 		if (curSong + 1 == songList.size())
 			myPlayer.SetFadeSamples(MSec2Samples(genOpts.fadeTime_single, myPlayer));
 		else
@@ -225,7 +234,7 @@ UINT8 PlayerMain(UINT8 showFileName)
 			myPlayer.SetEndSilenceSamples(MSec2Samples(genOpts.pauseTime_jingle, myPlayer));
 		else
 			myPlayer.SetEndSilenceSamples(MSec2Samples(genOpts.pauseTime_loop, myPlayer));
-
+		
 		// call "start" before showing song info, so that we can get the sound cores
 		myPlayer.Start();
 		fileSize = DataLoader_GetSize(dLoad);
@@ -1071,7 +1080,8 @@ static UINT8 InitAudioSystem(void)
 	else
 		drvEnable = 0x00;
 	
-	printf("Opening Audio Device ...\n");
+	fprintf(stderr, "Opening Audio Device ...  ");
+	fflush(stderr);
 	retVal = Audio_Init();
 	if (retVal == AERR_NODRVS)
 		return retVal;
@@ -1140,7 +1150,7 @@ static UINT8 InitAudioSystem(void)
 	if (adLog.driverID != -1)
 	{
 		Audio_GetDriverInfo(adLog.driverID, &drvInfo);
-		printf("Using file writer driver %s.\n", drvInfo->drvName);
+		fprintf(stderr, "Using file writer driver %s.\n", drvInfo->drvName);
 		retVal = InitAudioDriver(&adLog);
 		if (retVal)
 		{
