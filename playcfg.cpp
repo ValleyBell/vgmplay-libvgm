@@ -528,6 +528,13 @@ static void ParseCfg_ChipSection(ChipOptions& opts, const CfgSection& cfg, UINT8
 				opts.emuCoreSub = Str2FCC(coreStr);
 		}
 		break;
+	case DEVID_YMF278B:
+		{
+			std::string coreStr = Cfg_GetStrOrDefault(ceuList, "CoreFM", "");
+			if (! coreStr.empty())
+				opts.emuCoreSub = Str2FCC(coreStr);
+		}
+		break;
 	case DEVID_GB_DMG:
 		opts.addOpts = Cfg_GetBoolOrDefault(ceuList, "BoostWaveChn", true) ? OPT_GB_DMG_BOOST_WAVECH : 0x00;
 		break;
@@ -613,7 +620,8 @@ void ApplyCfg_Chip(PlayerWrapper& player, const GeneralOptions& gOpts, const Chi
 		if (retVal)
 			continue;	// this player doesn't support this chip
 		
-		devOpts.emuCore = cOpts.emuCore;
+		devOpts.emuCore[0] = cOpts.emuCore;
+		devOpts.emuCore[1] = cOpts.emuCoreSub;
 		devOpts.srMode = gOpts.chipSmplMode;
 		devOpts.resmplMode = gOpts.resmplMode;
 		devOpts.smplRate = gOpts.chipSmplRate;
