@@ -956,10 +956,13 @@ static UINT8 FilePlayCallback(PlayerBase* player, void* userParam, UINT8 evtType
 static DATA_LOADER* PlayerFileReqCallback(void* userParam, PlayerBase* player, const char* fileName)
 {
 	std::string filePath = FindFile_Single(fileName, appSearchPaths);
-	//printf("Player requested file - found at %s\n", filePath.c_str());
 	if (filePath.empty())
+	{
+		printf("Unable to find %s!\n", fileName);
 		return NULL;
-	
+	}
+	//printf("Player requested file - found at %s\n", filePath.c_str());
+
 	DATA_LOADER* dLoad = FileLoader_Init(filePath.c_str());
 	UINT8 retVal = DataLoader_Load(dLoad);
 	if (! retVal)

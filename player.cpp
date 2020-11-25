@@ -287,7 +287,8 @@ UINT8 PlayerWrapper::FadeOut(void)
 {
 	if (_player == NULL)
 		return 0xFF;
-	_fadeSmplStart = _player->GetCurPos(PLAYPOS_SAMPLE);
+	if (_fadeSmplStart == (UINT32)-1)
+		_fadeSmplStart = _player->GetCurPos(PLAYPOS_SAMPLE);
 	return 0x00;
 }
 
@@ -471,7 +472,7 @@ UINT8 PlayerWrapper::PlayCallback(PlayerBase* player, UINT8 evtType, void* evtPa
 			{
 				//if (_config.fadeSmpls == 0)
 				//	return 0x01;	// send "stop" signal to player engine
-				_fadeSmplStart = player->GetCurPos(PLAYPOS_SAMPLE);
+				FadeOut();
 			}
 		}
 		break;
