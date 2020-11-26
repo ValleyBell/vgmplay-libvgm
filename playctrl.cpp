@@ -407,6 +407,9 @@ static void ShowSongInfo(const std::string& fileName)
 		const S98_HEADER* s98hdr = s98play->GetFileHeader();
 		
 		sprintf(verStr, "S98 v%u", s98hdr->fileVer);
+		
+		if (! s98hdr->loopOfs && tags.find("TITLE") == tags.end())
+			isRawLog = true;
 	}
 	else if (player->GetPlayerType() == FCC_DRO)
 	{
@@ -484,6 +487,11 @@ static void ShowSongInfo(const std::string& fileName)
 			sameChip &= (! (pdi.core != pdi1.core && genOpts.showDevCore));
 			if (! sameChip)
 				break;
+		}
+		if (pdi.type == DEVID_SN76496)
+		{
+			if (pdi.devCfg->flags && drvCnt > 1)
+				drvCnt /= 2;	// the T6W28 consists of two "half" chips in VGMs
 		}
 		if (drvCnt > 1)
 			printf("%ux", drvCnt);
