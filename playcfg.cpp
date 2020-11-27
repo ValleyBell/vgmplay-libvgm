@@ -1,7 +1,6 @@
 #include <string.h>
 #include <vector>
 #include <string>
-#include <tuple>
 
 #ifdef _MSC_VER
 #define stricmp		_stricmp
@@ -32,6 +31,12 @@
 #include "player.hpp"
 
 
+struct ChipCfgSectDef
+{
+	UINT8 chipType;
+	const char* entryName;
+};
+
 #define BIT_MASK(startBit, bitCnt)	(((1 << bitCnt) - 1) << startBit)
 
 INLINE UINT32 MulDivRoundU32(UINT32 val, UINT32 mul, UINT32 div)
@@ -53,7 +58,7 @@ static void ParseCfg_ChipSection(ChipOptions& opts, const CfgSection& cfg, UINT8
 //void ApplyCfg_Chip(PlayerWrapper& player, const GeneralOptions& gOpts, const ChipOptions& cOpts);
 
 
-static const std::tuple<UINT8, std::string> CFG_CHIP_LIST[] =
+static const ChipCfgSectDef CFG_CHIP_LIST[] =
 {
 	{	DEVID_SN76496,	"SN76496"},
 	{	DEVID_YM2413,	"YM2413"},
@@ -117,12 +122,12 @@ void ParseConfiguration(GeneralOptions& gOpts, size_t cOptCnt, ChipOptions* cOpt
 		cOpts[curChp].chipType = 0xFF;
 	for (curChp = 0; curChp < CFG_CHIP_COUNT; curChp ++)
 	{
-		const std::tuple<UINT8, std::string>& cfgChip = CFG_CHIP_LIST[curChp];
-		sectIt = cfg._sections.find(std::get<1>(cfgChip));
+		const ChipCfgSectDef& cfgChip = CFG_CHIP_LIST[curChp];
+		sectIt = cfg._sections.find(cfgChip.entryName);
 		if (sectIt != cfg._sections.end())
-			ParseCfg_ChipSection(cOpts[std::get<0>(cfgChip)], sectIt->second, std::get<0>(cfgChip));
+			ParseCfg_ChipSection(cOpts[cfgChip.chipType], sectIt->second, cfgChip.chipType);
 		else
-			ParseCfg_ChipSection(cOpts[std::get<0>(cfgChip)], dummySect, std::get<0>(cfgChip));
+			ParseCfg_ChipSection(cOpts[cfgChip.chipType], dummySect, cfgChip.chipType);
 	}
 	
 	return;
