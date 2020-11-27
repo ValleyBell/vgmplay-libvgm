@@ -505,6 +505,11 @@ static void ParseCfg_ChipSection(ChipOptions& opts, const CfgSection& cfg, UINT8
 				opts.emuCore = FCC_CTR_;
 			else if (emuType == 1)
 				opts.emuCore = FCC_MAME;
+		case DEVID_SAA1099:
+			if (emuType == 0)
+				opts.emuCore = FCC_VBEL;
+			else if (emuType == 1)
+				opts.emuCore = FCC_MAME;
 			break;
 		}	// end switch(chipType) for emuCore
 	}
