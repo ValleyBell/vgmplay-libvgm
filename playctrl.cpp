@@ -56,6 +56,7 @@ struct AudioDriver
 
 
 UINT8 PlayerMain(UINT8 showFileName);
+static bool AdvanceSongList(size_t& songIdx, int controlVal);
 static UINT8 OpenFile(const std::string& fileName, DATA_LOADER*& dLoad, PlayerBase*& player);
 static void PreparePlayback(void);
 static void Tags_RemoveEmpty(std::map<std::string, std::string>& tags);
@@ -67,7 +68,7 @@ static void ShowSongInfo(void);
 static void ShowConsoleTitle(const std::string& fileName, const std::string& titleTag, const std::string& gameTag);
 static UINT8 PlayFile(void);
 static int GetPressedKey(void);
-static UINT8 HandleKeyPress(void);
+static UINT8 HandleKeyPress(bool waitForKey);
 static inline std::string FCC2Str(UINT32 fcc);
 static INT8 GetTimeDispMode(double seconds);
 static std::string GetTimeStr(double seconds, INT8 showHours = 0);
@@ -215,13 +216,13 @@ UINT8 PlayerMain(UINT8 showFileName)
 		retVal = OpenFile(sfl.fileName, dLoad, player);
 		if (retVal & 0x80)
 		{
-			// TODO: show error message + wait for key press
-			if (controlVal == -1 && curSong == 0)
+			if (curSong == 0 && controlVal < 0)
 				controlVal = +1;
-			curSong += controlVal;
-			_getch();
-			// TODO: evaluate pressed key + exit when ESC is pressed
-			continue;
+			HandleKeyPress(true);
+			if (! AdvanceSongList(curSong, controlVal))
+				break;
+			else
+				continue;
 		}
 		
 		fileEndPos = DataLoader_GetSize(dLoad);
@@ -230,6 +231,7 @@ UINT8 PlayerMain(UINT8 showFileName)
 		
 		// call "start" before showing song info, so that we can get the sound cores
 		myPlayer.Start();
+		playState |= PLAYSTATE_PLAY;	// tell the key handler to enable playback controls
 		
 		timeDispMode = GetTimeDispMode(myPlayer.GetTotalTime(0));
 		if (genOpts.setTermTitle)
@@ -242,24 +244,14 @@ UINT8 PlayerMain(UINT8 showFileName)
 		PlayFile();
 		StopDiskWriter();
 		
+		playState &= ~PLAYSTATE_PLAY;
 		myPlayer.Stop();
 		
 		myPlayer.UnloadFile();
 		DataLoader_Deinit(dLoad);
 		
-		if (controlVal == +1)
-		{
-			curSong ++;
-		}
-		else if (controlVal == -1)
-		{
-			if (curSong > 0)
-				curSong --;
-		}
-		else if (controlVal == +9)
-		{
+		if (! AdvanceSongList(curSong, controlVal))
 			break;
-		}
 	}	// end for(curSong)
 	
 	myPlayer.UnregisterAllPlayers();
@@ -268,6 +260,23 @@ UINT8 PlayerMain(UINT8 showFileName)
 	DeinitAudioSystem();
 	
 	return 0;
+}
+
+static bool AdvanceSongList(size_t& songIdx, int controlVal)
+{
+	if (controlVal == +9)
+		return false;	// "break" value
+	
+	if (controlVal > 0)
+	{
+		curSong ++;
+	}
+	else if (controlVal < 0)
+	{
+		if (curSong > 0)
+			curSong --;
+	}
+	return true;
 }
 
 static UINT8 OpenFile(const std::string& fileName, DATA_LOADER*& dLoad, PlayerBase*& player)
@@ -661,7 +670,7 @@ static UINT8 PlayFile(void)
 			Sleep(50);
 		}
 		
-		retVal = HandleKeyPress();
+		retVal = HandleKeyPress(false);
 		if (retVal)
 		{
 			needRefresh = true;
@@ -822,9 +831,9 @@ static int GetPressedKey(void)
 }
 #endif
 
-static UINT8 HandleKeyPress(void)
+static UINT8 HandleKeyPress(bool waitForKey)
 {
-	if (! _kbhit())
+	if (! waitForKey && ! _kbhit())
 		return 0;
 	
 	int keyCode = GetPressedKey();
@@ -839,6 +848,8 @@ static UINT8 HandleKeyPress(void)
 		return 0x10;
 	case ' ':
 	case 'P':	// pause
+		if (! (playState & PLAYSTATE_PLAY))
+			break;
 		playState ^= PLAYSTATE_PAUSE;
 		/*if (genOpts.soundWhilePaused)
 		{
@@ -853,11 +864,15 @@ static UINT8 HandleKeyPress(void)
 		}
 		break;
 	case 'F':	// fade out
+		if (! (playState & PLAYSTATE_PLAY))
+			break;
 		// enforce "non-playlist" fade-out
 		myPlayer.SetFadeSamples(MSec2Samples(genOpts.fadeTime_single, myPlayer));
 		myPlayer.FadeOut();
 		break;
 	case 'R':	// restart
+		if (! (playState & PLAYSTATE_PLAY))
+			break;
 		OSMutex_Lock(renderMtx);
 		myPlayer.Reset();
 		OSMutex_Unlock(renderMtx);
@@ -866,6 +881,8 @@ static UINT8 HandleKeyPress(void)
 	case KEY_RIGHT:
 	case KEY_CTRL | KEY_LEFT:
 	case KEY_CTRL | KEY_RIGHT:
+		if (! (playState & PLAYSTATE_PLAY))
+			break;
 		{
 			UINT32 destPos;
 			INT32 seekSmpls;
@@ -906,6 +923,9 @@ static UINT8 HandleKeyPress(void)
 	default:
 		if (keyCode >= '0' && keyCode <= '9')
 		{
+			if (! (playState & PLAYSTATE_PLAY))
+				break;
+			
 			UINT32 maxPos;
 			UINT8 pbPos10;
 			UINT32 destPos;
