@@ -336,12 +336,7 @@ static void PreparePlayback(void)
 		DROPlayer* droplay = dynamic_cast<DROPlayer*>(player);
 		const DRO_HEADER* drohdr = droplay->GetFileHeader();
 		
-		if (drohdr->verMajor == 0)
-			fileStartPos = 0x11;
-		else if (drohdr->verMajor == 1)
-			fileStartPos = 0x18;
-		else //if (drohdr->verMajor == 2)
-			fileStartPos = 0x1A + drohdr->regCmdCnt;
+		fileStartPos = drohdr->dataOfs;
 		
 		isRawLog = true;
 	}
