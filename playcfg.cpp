@@ -19,6 +19,7 @@
 #include <emu/SoundDevs.h>
 // libvgm-emu headers for configuration
 #include <emu/EmuCores.h>
+#include <emu/EmuStructs.h>	// for DEVRI_SRMODE_* constants
 #include <emu/cores/2612intf.h>
 #include <emu/cores/gb.h>
 #include <emu/cores/nesintf.h>
@@ -609,6 +610,29 @@ void ApplyCfg_General(PlayerWrapper& player, const GeneralOptions& opts)
 	return;
 }
 
+static UINT8 ConvertChipSmplModeOption(UINT8 devID, UINT8 option)
+{
+	switch(option)
+	{
+	case 0x00:	// native
+		return DEVRI_SRMODE_NATIVE;
+	case 0x01:	// highest sampling rate (native/custom)
+		return DEVRI_SRMODE_HIGHEST;
+	case 0x02:	// custom sample rate
+		return DEVRI_SRMODE_CUSTOM;
+	case 0x03:	// native for FM, highest for others
+		{
+			bool isFM = false;
+			isFM = (devID == DEVID_YM3526 || devID == DEVID_Y8950 || devID == DEVID_YM3812 ||
+				devID == DEVID_YM2413 || devID == DEVID_YMF262 || devID == DEVID_YM2151 ||
+				devID == DEVID_YM2203 || devID == DEVID_YM2608 || devID == DEVID_YM2610 || devID == DEVID_YM2612);
+			return isFM ? DEVRI_SRMODE_NATIVE : DEVRI_SRMODE_HIGHEST;
+		}
+	default:
+		return 0x00;
+	}
+}
+
 void ApplyCfg_Chip(PlayerWrapper& player, const GeneralOptions& gOpts, const ChipOptions& cOpts)
 {
 	const std::vector<PlayerBase*>& plrs = player.GetRegisteredPlayers();
@@ -632,7 +656,7 @@ void ApplyCfg_Chip(PlayerWrapper& player, const GeneralOptions& gOpts, const Chi
 		
 		devOpts.emuCore[0] = cOpts.emuCore;
 		devOpts.emuCore[1] = cOpts.emuCoreSub;
-		devOpts.srMode = gOpts.chipSmplMode;
+		devOpts.srMode = ConvertChipSmplModeOption(cOpts.chipType, gOpts.chipSmplMode);
 		devOpts.resmplMode = gOpts.resmplMode;
 		devOpts.smplRate = gOpts.chipSmplRate;
 		devOpts.coreOpts = cOpts.addOpts;
