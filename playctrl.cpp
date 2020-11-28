@@ -57,8 +57,12 @@ struct AudioDriver
 
 UINT8 PlayerMain(UINT8 showFileName);
 static UINT8 OpenFile(const std::string& fileName, DATA_LOADER*& dLoad, PlayerBase*& player);
+static void PreparePlayback(void);
+static void Tags_RemoveEmpty(std::map<std::string, std::string>& tags);
+static void Tags_LangFilter(std::map<std::string, std::string>& tags, const std::string& tagName, const std::vector<std::string>& langPostfixes, int defaultLang);
 static const char* GetTagForDisp(const std::map<std::string, std::string>& tags, const std::string& tagName);
-static void ShowSongInfo(const std::string& fileName);
+static void EnumerateTags(void);
+static void ShowSongInfo(void);
 static void ShowConsoleTitle(const std::string& fileName, const std::string& titleTag, const std::string& gameTag);
 static UINT8 PlayFile(void);
 static int GetPressedKey(void);
@@ -127,6 +131,7 @@ static size_t curSong;
 static GeneralOptions genOpts;
 static ChipOptions chipOpts[0x100];
 static PlayerWrapper myPlayer;
+static std::map<std::string, std::string> songTags;
 
 INLINE UINT32 MSec2Samples(UINT32 val, const PlayerWrapper& player)
 {
@@ -217,30 +222,17 @@ UINT8 PlayerMain(UINT8 showFileName)
 			continue;
 		}
 		
-		if (myPlayer.GetPlayer()->GetPlayerType() == FCC_VGM)
-		{
-			VGMPlayer* vgmplay = dynamic_cast<VGMPlayer*>(myPlayer.GetPlayer());
-			const VGM_HEADER* vgmhdr = vgmplay->GetFileHeader();
-			PlrWrapConfig pwCfg;
-			pwCfg = myPlayer.GetConfiguration();
-			pwCfg.masterVol = (INT32)(0x10000 * pow(2.0, vgmhdr->volumeGain / (double)0x100) * genOpts.volume + 0.5);
-			myPlayer.SetConfiguration(pwCfg);
-		}
-		if (curSong + 1 == songList.size())
-			myPlayer.SetFadeSamples(MSec2Samples(genOpts.fadeTime_single, myPlayer));
-		else
-			myPlayer.SetFadeSamples(MSec2Samples(genOpts.fadeTime_plist, myPlayer));
-		if (myPlayer.GetPlayer()->GetLoopTicks() == 0)
-			myPlayer.SetEndSilenceSamples(MSec2Samples(genOpts.pauseTime_jingle, myPlayer));
-		else
-			myPlayer.SetEndSilenceSamples(MSec2Samples(genOpts.pauseTime_loop, myPlayer));
+		fileSize = DataLoader_GetSize(dLoad);
+		EnumerateTags();	// must be done before PreparePlayback(), as it may parse some of the tags
+		PreparePlayback();
 		
 		// call "start" before showing song info, so that we can get the sound cores
 		myPlayer.Start();
-		fileSize = DataLoader_GetSize(dLoad);
 		
 		timeDispMode = GetTimeDispMode(myPlayer.GetTotalTime(0));
-		ShowSongInfo(sfl.fileName);
+		if (genOpts.setTermTitle)
+			ShowConsoleTitle(sfl.fileName, GetTagForDisp(songTags, "TITLE"), GetTagForDisp(songTags, "GAME"));
+		ShowSongInfo();
 		
 		retVal = StartDiskWriter(sfl.fileName);
 		if (retVal)
@@ -302,6 +294,58 @@ static UINT8 OpenFile(const std::string& fileName, DATA_LOADER*& dLoad, PlayerBa
 	return 0x00;
 }
 
+static void PreparePlayback(void)
+{
+	PlayerBase* player = myPlayer.GetPlayer();
+	UINT32 timeMS;
+	
+	isRawLog = false;
+	if (player->GetPlayerType() == FCC_VGM)
+	{
+		VGMPlayer* vgmplay = dynamic_cast<VGMPlayer*>(player);
+		const VGM_HEADER* vgmhdr = vgmplay->GetFileHeader();
+		PlrWrapConfig pwCfg;
+		double volFactor;
+		
+		pwCfg = myPlayer.GetConfiguration();
+		volFactor = pow(2.0, vgmhdr->volumeGain / (double)0x100);
+		pwCfg.masterVol = (INT32)(0x10000 * volFactor * genOpts.volume + 0.5);
+		myPlayer.SetConfiguration(pwCfg);
+		
+		fileSize = vgmplay->GetFileHeader()->dataEnd;
+		
+		// RAW Log: no loop, no/empty Creator tag, System Name IS set
+		if (! vgmhdr->loopOfs && songTags.find("ENCODED_BY") == songTags.end() &&
+			songTags.find("SYSTEM") != songTags.end())
+			isRawLog = true;
+		if (vgmhdr->numTicks == 0)
+			isRawLog = false;
+	}
+	else if (player->GetPlayerType() == FCC_S98)
+	{
+		S98Player* s98play = dynamic_cast<S98Player*>(player);
+		const S98_HEADER* s98hdr = s98play->GetFileHeader();
+		
+		if (! s98hdr->loopOfs && songTags.find("TITLE") == songTags.end())
+			isRawLog = true;
+	}
+	else if (player->GetPlayerType() == FCC_DRO)
+	{
+		//DROPlayer* droplay = dynamic_cast<DROPlayer*>(player);
+		
+		isRawLog = true;
+	}
+	
+	// last song: fadeTime_single, others: fadeTime_plist
+	timeMS = (curSong + 1 == songList.size()) ? genOpts.fadeTime_single : genOpts.fadeTime_plist;
+	myPlayer.SetFadeSamples(MSec2Samples(timeMS, myPlayer));
+	
+	timeMS = (player->GetLoopTicks() == 0) ? genOpts.pauseTime_jingle : genOpts.pauseTime_loop;
+	myPlayer.SetEndSilenceSamples(MSec2Samples(timeMS, myPlayer));
+	
+	return;
+}
+
 static void Tags_RemoveEmpty(std::map<std::string, std::string>& tags)
 {
 	auto tagIt = tags.begin();
@@ -359,13 +403,10 @@ static const char* GetTagForDisp(const std::map<std::string, std::string>& tags,
 	return (tagIt == tags.end()) ? "" : tagIt->second.c_str();
 }
 
-static void ShowSongInfo(const std::string& fileName)
+static void EnumerateTags(void)
 {
 	PlayerBase* player = myPlayer.GetPlayer();
-	PLR_SONG_INFO sInf;
-	std::map<std::string, std::string> tags;
 	std::vector<std::string> langPostfixes;
-	char verStr[0x20];
 	int defaultLang = genOpts.preferJapTag ? 1 : 0;
 	
 	langPostfixes.push_back("");
@@ -373,33 +414,33 @@ static void ShowSongInfo(const std::string& fileName)
 	
 	const char* const* tagList = player->GetTags();
 	for (const char* const* t = tagList; *t != NULL; t += 2)
-		tags[t[0]] = t[1];
+		songTags[t[0]] = t[1];
 	
-	Tags_RemoveEmpty(tags);	// need to remove empty VGM tags, else the LangFilter may choose them
+	Tags_RemoveEmpty(songTags);	// need to remove empty VGM tags, else the LangFilter may choose them
 	
-	Tags_LangFilter(tags, "TITLE", langPostfixes, defaultLang);
-	Tags_LangFilter(tags, "GAME", langPostfixes, defaultLang);
-	Tags_LangFilter(tags, "SYSTEM", langPostfixes, defaultLang);
-	Tags_LangFilter(tags, "ARTIST", langPostfixes, defaultLang);
+	Tags_LangFilter(songTags, "TITLE", langPostfixes, defaultLang);
+	Tags_LangFilter(songTags, "GAME", langPostfixes, defaultLang);
+	Tags_LangFilter(songTags, "SYSTEM", langPostfixes, defaultLang);
+	Tags_LangFilter(songTags, "ARTIST", langPostfixes, defaultLang);
 	
-	INT16 volGain = 0x00;
+	return;
+}
+
+static void ShowSongInfo(void)
+{
+	PlayerBase* player = myPlayer.GetPlayer();
+	PLR_SONG_INFO sInf;
+	char verStr[0x20];
+	double volGain = 1.0;
+	
 	player->GetSongInfo(sInf);
-	isRawLog = false;	// TODO: set this variable in another function
 	if (player->GetPlayerType() == FCC_VGM)
 	{
 		VGMPlayer* vgmplay = dynamic_cast<VGMPlayer*>(player);
 		const VGM_HEADER* vgmhdr = vgmplay->GetFileHeader();
 		
 		sprintf(verStr, "VGM %X.%02X", (vgmhdr->fileVer >> 8) & 0xFF, (vgmhdr->fileVer >> 0) & 0xFF);
-		volGain = vgmhdr->volumeGain;
-		fileSize = vgmplay->GetFileHeader()->dataEnd;
-		
-		// RAW Log: no loop, no/empty Creator tag, System Name IS set
-		if (! vgmhdr->loopOfs && tags.find("ENCODED_BY") == tags.end() &&
-			tags.find("SYSTEM") != tags.end())
-			isRawLog = true;
-		if (! vgmhdr->numTicks)
-			isRawLog = false;
+		volGain = pow(2.0, vgmhdr->volumeGain / (double)0x100);
 	}
 	else if (player->GetPlayerType() == FCC_S98)
 	{
@@ -407,9 +448,6 @@ static void ShowSongInfo(const std::string& fileName)
 		const S98_HEADER* s98hdr = s98play->GetFileHeader();
 		
 		sprintf(verStr, "S98 v%u", s98hdr->fileVer);
-		
-		if (! s98hdr->loopOfs && tags.find("TITLE") == tags.end())
-			isRawLog = true;
 	}
 	else if (player->GetPlayerType() == FCC_DRO)
 	{
@@ -417,30 +455,26 @@ static void ShowSongInfo(const std::string& fileName)
 		const DRO_HEADER* drohdr = droplay->GetFileHeader();
 		
 		sprintf(verStr, "DRO v%u", drohdr->verMajor);	// DRO has a "verMinor" field, but it's always 0
-		isRawLog = true;
 	}
 	
-	if (genOpts.setTermTitle)
-		ShowConsoleTitle(fileName, GetTagForDisp(tags, "TITLE"), GetTagForDisp(tags, "GAME"));
-	
-	u8printf("Track Title:    %s\n", GetTagForDisp(tags, "TITLE"));
-	u8printf("Game Name:      %s\n", GetTagForDisp(tags, "GAME"));
-	u8printf("System:         %s\n", GetTagForDisp(tags, "SYSTEM"));
-	u8printf("Composer:       %s\n", GetTagForDisp(tags, "ARTIST"));
+	u8printf("Track Title:    %s\n", GetTagForDisp(songTags, "TITLE"));
+	u8printf("Game Name:      %s\n", GetTagForDisp(songTags, "GAME"));
+	u8printf("System:         %s\n", GetTagForDisp(songTags, "SYSTEM"));
+	u8printf("Composer:       %s\n", GetTagForDisp(songTags, "ARTIST"));
 	if (player->GetPlayerType() == FCC_S98)
 	{
 		S98Player* s98play = dynamic_cast<S98Player*>(player);
 		const S98_HEADER* s98hdr = s98play->GetFileHeader();
 		
-		u8printf("Release:        %-11s Tick Rate: %u/%u\n", GetTagForDisp(tags, "DATE"),
+		u8printf("Release:        %-11s Tick Rate: %u/%u\n", GetTagForDisp(songTags, "DATE"),
 			s98hdr->tickMult, s98hdr->tickDiv);
 	}
 	else
 	{
-		u8printf("Release:        %s\n", GetTagForDisp(tags, "DATE"));
+		u8printf("Release:        %s\n", GetTagForDisp(songTags, "DATE"));
 	}
 	printf("Format:         %-11s ", verStr);
-	printf("Gain:%5.2f    ", pow(2.0, volGain / (double)0x100));
+	printf("Gain:%5.2f    ", volGain);
 	if (player->GetPlayerType() == FCC_DRO)
 	{
 		DROPlayer* droplay = dynamic_cast<DROPlayer*>(player);
@@ -465,8 +499,8 @@ static void ShowSongInfo(const std::string& fileName)
 		else
 			printf("Loop: No\n");
 	}
-	u8printf("VGM by:         %s\n", GetTagForDisp(tags, "ENCODED_BY"));
-	u8printf("Notes:          %s\n", GetTagForDisp(tags, "COMMENT"));
+	u8printf("VGM by:         %s\n", GetTagForDisp(songTags, "ENCODED_BY"));
+	u8printf("Notes:          %s\n", GetTagForDisp(songTags, "COMMENT"));
 	printf("\n");
 	
 	std::vector<PLR_DEV_INFO> diList;
