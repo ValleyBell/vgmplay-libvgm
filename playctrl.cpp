@@ -299,21 +299,16 @@ static void PreparePlayback(void)
 {
 	PlayerBase* player = myPlayer.GetPlayer();
 	UINT32 timeMS;
+	double volGain = 1.0;
 	
 	isRawLog = false;
 	if (player->GetPlayerType() == FCC_VGM)
 	{
 		VGMPlayer* vgmplay = dynamic_cast<VGMPlayer*>(player);
 		const VGM_HEADER* vgmhdr = vgmplay->GetFileHeader();
-		PlrWrapConfig pwCfg;
-		double volFactor;
 		
-		pwCfg = myPlayer.GetConfiguration();
-		volFactor = pow(2.0, vgmhdr->volumeGain / (double)0x100);
-		pwCfg.masterVol = (INT32)(0x10000 * volFactor * genOpts.volume + 0.5);
-		myPlayer.SetConfiguration(pwCfg);
-		
-		fileSize = vgmplay->GetFileHeader()->dataEnd;
+		fileSize = vgmhdr->dataEnd;
+		volGain = pow(2.0, vgmhdr->volumeGain / (double)0x100);
 		
 		// RAW Log: no loop, no/empty Creator tag, System Name IS set
 		if (! vgmhdr->loopOfs && songTags.find("ENCODED_BY") == songTags.end() &&
@@ -336,6 +331,10 @@ static void PreparePlayback(void)
 		
 		isRawLog = true;
 	}
+	
+	PlrWrapConfig pwCfg = myPlayer.GetConfiguration();
+	pwCfg.masterVol = (INT32)(0x10000 * volGain * genOpts.volume + 0.5);
+	myPlayer.SetConfiguration(pwCfg);
 	
 	// last song: fadeTime_single, others: fadeTime_plist
 	timeMS = (curSong + 1 == songList.size()) ? genOpts.fadeTime_single : genOpts.fadeTime_plist;
@@ -414,14 +413,18 @@ static void EnumerateTags(void)
 	std::vector<std::string> langPostfixes;
 	int defaultLang = genOpts.preferJapTag ? 1 : 0;
 	
-	langPostfixes.push_back("");
-	langPostfixes.push_back("-JPN");
-	
 	const char* const* tagList = player->GetTags();
+	songTags.clear();
+	if (tagList == NULL)
+		return;
+	
 	for (const char* const* t = tagList; *t != NULL; t += 2)
 		songTags[t[0]] = t[1];
 	
 	Tags_RemoveEmpty(songTags);	// need to remove empty VGM tags, else the LangFilter may choose them
+	
+	langPostfixes.push_back("");
+	langPostfixes.push_back("-JPN");
 	
 	Tags_LangFilter(songTags, "TITLE", langPostfixes, defaultLang);
 	Tags_LangFilter(songTags, "GAME", langPostfixes, defaultLang);
