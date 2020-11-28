@@ -59,7 +59,8 @@ UINT8 PlayerMain(UINT8 showFileName);
 static UINT8 OpenFile(const std::string& fileName, DATA_LOADER*& dLoad, PlayerBase*& player);
 static void PreparePlayback(void);
 static void Tags_RemoveEmpty(std::map<std::string, std::string>& tags);
-static void Tags_LangFilter(std::map<std::string, std::string>& tags, const std::string& tagName, const std::vector<std::string>& langPostfixes, int defaultLang);
+static void Tags_LangFilter(std::map<std::string, std::string>& tags, const std::string& tagName,
+	const std::vector<std::string>& langPostfixes, int defaultLang);
 static const char* GetTagForDisp(const std::map<std::string, std::string>& tags, const std::string& tagName);
 static void EnumerateTags(void);
 static void ShowSongInfo(void);
@@ -348,33 +349,37 @@ static void PreparePlayback(void)
 
 static void Tags_RemoveEmpty(std::map<std::string, std::string>& tags)
 {
-	auto tagIt = tags.begin();
+	std::map<std::string, std::string>::iterator tagIt;
 	for (tagIt = tags.begin(); tagIt != tags.end(); )
 	{
 		if (tagIt->second.empty())
 			tagIt = tags.erase(tagIt);
 		else
-			++ tagIt;
+			++tagIt;
 	}
 	return;
 }
 
-static void Tags_LangFilter(std::map<std::string, std::string>& tags, const std::string& tagName, const std::vector<std::string>& langPostfixes, int defaultLang)
+static void Tags_LangFilter(std::map<std::string, std::string>& tags, const std::string& tagName,
+	const std::vector<std::string>& langPostfixes, int defaultLang)
 {
 	// 1. search for matching lang-tag
 	// 2. save that
 	// 3. remove all others
 	std::vector<std::string> langTags;
-	auto chosenTagIt = tags.end();
+	std::vector<std::string>::const_iterator lpfIt;
+	std::vector<std::string>::const_iterator ltIt;
+	std::map<std::string, std::string>::iterator chosenTagIt;
 	
-	for (auto lpfIt = langPostfixes.begin(); lpfIt != langPostfixes.end(); ++lpfIt)
+	for (lpfIt = langPostfixes.begin(); lpfIt != langPostfixes.end(); ++lpfIt)
 		langTags.push_back(tagName + *lpfIt);
 	
+	chosenTagIt = tags.end();
 	if (defaultLang >= 0 && (size_t)defaultLang < langTags.size())
 		chosenTagIt = tags.find(langTags[defaultLang]);
 	if (chosenTagIt == tags.end())
 	{
-		for (auto ltIt = langTags.begin(); ltIt != langTags.end(); ++ltIt)
+		for (ltIt = langTags.begin(); ltIt != langTags.end(); ++ltIt)
 		{
 			chosenTagIt = tags.find(*ltIt);
 			if (chosenTagIt != tags.end())
@@ -387,7 +392,7 @@ static void Tags_LangFilter(std::map<std::string, std::string>& tags, const std:
 	if (chosenTagIt->first != tagName)
 		tags[tagName] = chosenTagIt->second;
 	
-	for (auto ltIt = langTags.begin(); ltIt != langTags.end(); ++ltIt)
+	for (ltIt = langTags.begin(); ltIt != langTags.end(); ++ltIt)
 	{
 		if (*ltIt == tagName)
 			continue;
@@ -399,7 +404,7 @@ static void Tags_LangFilter(std::map<std::string, std::string>& tags, const std:
 
 static const char* GetTagForDisp(const std::map<std::string, std::string>& tags, const std::string& tagName)
 {
-	auto tagIt = tags.find(tagName);
+	std::map<std::string, std::string>::const_iterator tagIt = tags.find(tagName);
 	return (tagIt == tags.end()) ? "" : tagIt->second.c_str();
 }
 
