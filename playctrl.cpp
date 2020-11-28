@@ -119,7 +119,8 @@ static volatile UINT8 playState;
 
 static INT8 timeDispMode = 0;
 static bool isRawLog;
-static UINT32 fileSize;
+static UINT32 fileStartPos;
+static UINT32 fileEndPos;
 
 extern std::vector<std::string> appSearchPaths;
 extern Configuration playerCfg;
@@ -223,7 +224,7 @@ UINT8 PlayerMain(UINT8 showFileName)
 			continue;
 		}
 		
-		fileSize = DataLoader_GetSize(dLoad);
+		fileEndPos = DataLoader_GetSize(dLoad);
 		EnumerateTags();	// must be done before PreparePlayback(), as it may parse some of the tags
 		PreparePlayback();
 		
@@ -307,7 +308,8 @@ static void PreparePlayback(void)
 		VGMPlayer* vgmplay = dynamic_cast<VGMPlayer*>(player);
 		const VGM_HEADER* vgmhdr = vgmplay->GetFileHeader();
 		
-		fileSize = vgmhdr->dataEnd;
+		fileEndPos = vgmhdr->dataEnd;
+		fileStartPos = vgmhdr->dataOfs;
 		volGain = pow(2.0, vgmhdr->volumeGain / (double)0x100);
 		
 		// RAW Log: no loop, no/empty Creator tag, System Name IS set
@@ -322,12 +324,24 @@ static void PreparePlayback(void)
 		S98Player* s98play = dynamic_cast<S98Player*>(player);
 		const S98_HEADER* s98hdr = s98play->GetFileHeader();
 		
+		fileStartPos = s98hdr->dataOfs;
+		if (s98hdr->tagOfs > s98hdr->dataOfs)
+			fileEndPos = s98hdr->tagOfs;
+		
 		if (! s98hdr->loopOfs && songTags.find("TITLE") == songTags.end())
 			isRawLog = true;
 	}
 	else if (player->GetPlayerType() == FCC_DRO)
 	{
-		//DROPlayer* droplay = dynamic_cast<DROPlayer*>(player);
+		DROPlayer* droplay = dynamic_cast<DROPlayer*>(player);
+		const DRO_HEADER* drohdr = droplay->GetFileHeader();
+		
+		if (drohdr->verMajor == 0)
+			fileStartPos = 0x11;
+		else if (drohdr->verMajor == 1)
+			fileStartPos = 0x18;
+		else //if (drohdr->verMajor == 2)
+			fileStartPos = 0x1A + drohdr->regCmdCnt;
 		
 		isRawLog = true;
 	}
@@ -626,8 +640,13 @@ static UINT8 PlayFile(void)
 				pState = "Fading ";
 			else
 				pState = "Playing";
+			
+			UINT32 dataLen = fileEndPos - fileStartPos;
+			UINT32 dataPos = myPlayer.GetCurPos(PLAYPOS_FILEOFS);
+			dataPos = (dataPos >= fileStartPos) ? (dataPos - fileStartPos) : 0x00;
+			
 			printf("%s%6.2f%%  %s / %s seconds  \r", pState,
-					100.0 * myPlayer.GetCurPos(PLAYPOS_FILEOFS) / fileSize,
+					100.0 * dataPos / dataLen,
 					GetTimeStr(myPlayer.GetCurTime(0), timeDispMode).c_str(),
 					GetTimeStr(myPlayer.GetTotalTime(0), timeDispMode).c_str());
 			fflush(stdout);
