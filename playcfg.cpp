@@ -285,9 +285,9 @@ static void ParseCfg_ChipSection(ChipOptions& opts, const CfgSection& cfg, UINT8
 				break;
 			case DEVID_YMF278B:
 				if (! stricmp(maskSpecifier, "FM"))
-					opts.muteMask[0] = (UINT32)strtoul(value, NULL, 0);
-				else if (! stricmp(maskSpecifier, "WT"))
 					opts.muteMask[1] = (UINT32)strtoul(value, NULL, 0);
+				else if (! stricmp(maskSpecifier, "WT"))
+					opts.muteMask[0] = (UINT32)strtoul(value, NULL, 0);
 				break;
 			}
 		}	// end if (key == "MuteMask_*")
@@ -405,7 +405,7 @@ static void ParseCfg_ChipSection(ChipOptions& opts, const CfgSection& cfg, UINT8
 							break;
 						if (chnNum >= 18)
 							break;
-						maskID = 0;
+						maskID = 1;
 					}
 					else if (! strnicmp(chnName, "WTCh", 4))
 					{
@@ -413,9 +413,9 @@ static void ParseCfg_ChipSection(ChipOptions& opts, const CfgSection& cfg, UINT8
 						chnNum = (UINT8)strtol(idStr, &endPtr, 0);
 						if (endPtr == NULL || endPtr == idStr)
 							continue;
-						maskID = 1;
+						maskID = 0;
 					}
-					if (! strnicmp(chnName, "FM", 2))
+					else if (! strnicmp(chnName, "FM", 2))
 					{
 						chnName += 2;
 						if (! stricmp(chnName, "BD"))
@@ -431,7 +431,7 @@ static void ParseCfg_ChipSection(ChipOptions& opts, const CfgSection& cfg, UINT8
 						if (chnNum != 0xFF)
 						{
 							chnNum += 18;
-							maskID = 0;
+							maskID = 1;
 						}
 					}
 					break;
@@ -488,9 +488,9 @@ static void ParseCfg_ChipSection(ChipOptions& opts, const CfgSection& cfg, UINT8
 				break;
 			case DEVID_YMF278B:
 				if (! stricmp(maskSpecifier, "FM"))
-					maskID = 0;
-				else if (! stricmp(maskSpecifier, "WT"))
 					maskID = 1;
+				else if (! stricmp(maskSpecifier, "WT"))
+					maskID = 0;
 				break;
 			}
 			
