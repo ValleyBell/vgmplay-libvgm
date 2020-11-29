@@ -233,6 +233,8 @@ UINT8 PlayerMain(UINT8 showFileName)
 		myPlayer.Start();
 		playState |= PLAYSTATE_PLAY;	// tell the key handler to enable playback controls
 		
+		myPlayer.Render(0, NULL);	// process first sample
+		fileStartPos = myPlayer.GetCurPos(PLAYPOS_FILEOFS);	// get position after processing initialization block
 		timeDispMode = GetTimeDispMode(myPlayer.GetTotalTime(0));
 		if (genOpts.setTermTitle)
 			ShowConsoleTitle(sfl.fileName, GetTagForDisp(songTags, "TITLE"), GetTagForDisp(songTags, "GAME"));

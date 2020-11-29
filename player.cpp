@@ -359,9 +359,6 @@ UINT32 PlayerWrapper::Render(UINT32 bufSize, void* data)
 	INT32 curVolume;
 	
 	smplCount = bufSize / _outSmplSize;
-	if (! smplCount)
-		return 0;
-	
 	if (_player == NULL)
 	{
 		memset(data, 0x00, smplCount * _outSmplSize);
@@ -372,6 +369,12 @@ UINT32 PlayerWrapper::Render(UINT32 bufSize, void* data)
 		//fprintf(stderr, "Player Warning: calling Render while not playing! playState = 0x%02X\n", _player->GetState());
 		memset(data, 0x00, smplCount * _outSmplSize);
 		return smplCount * _outSmplSize;
+	}
+	
+	if (! smplCount)
+	{
+		_player->Render(0, NULL);	// dummy-rendering
+		return 0;
 	}
 	
 	if (smplCount > _smplBuf.size())
