@@ -12,7 +12,7 @@ struct CfgSection
 	typedef std::map<std::string, std::string> Unordered;
 	// config entires where order matters (for channel muting)
 	typedef std::vector< std::pair<std::string, std::string> > Ordered;
-
+	
 	Unordered unord;
 	Ordered ordered;
 };

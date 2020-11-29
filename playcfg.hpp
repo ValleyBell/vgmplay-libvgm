@@ -41,6 +41,7 @@ struct ChipOptions
 	UINT32 emuCore;
 	UINT32 emuCoreSub;
 	UINT32 muteMask[2];
+	double panMask[2][32];
 	UINT32 addOpts;
 };
 

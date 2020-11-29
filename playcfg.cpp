@@ -52,6 +52,7 @@ static inline std::string Cfg_GetStrOrDefault(const CfgSection::Unordered& ceLis
 static inline unsigned long Cfg_GetUIntOrDefault(const CfgSection::Unordered& ceList, const std::string& entryName, unsigned long defaultValue);
 static inline double Cfg_GetFloatOrDefault(const CfgSection::Unordered& ceList, const std::string& entryName, double defaultValue);
 static inline bool Cfg_GetBoolOrDefault(const CfgSection::Unordered& ceList, const std::string& entryName, bool defaultValue);
+static std::vector<std::string> Cfg_Str2VectStr(const std::string& text);
 static void ParseCfg_General(GeneralOptions& opts, const CfgSection& cfg);
 static void ParseCfg_ChipSection(ChipOptions& opts, const CfgSection& cfg, UINT8 chipType);
 
@@ -166,6 +167,24 @@ static inline bool Cfg_GetBoolOrDefault(const CfgSection::Unordered& ceList, con
 	return (ceIt != ceList.end()) ? Configuration::ToBool(ceIt->second) : defaultValue;
 }
 
+static std::vector<std::string> Cfg_Str2VectStr(const std::string& text)
+{
+	size_t pos1;
+	size_t pos2;
+	std::vector<std::string> result;
+	
+	pos1 = 0;
+	pos2 = text.find(',', pos1);
+	while(pos2 != std::string::npos)
+	{
+		result.push_back(text.substr(pos1, pos2 - pos1));
+		pos1 = pos2 + 1;
+		pos2 = text.find(',', pos1);
+	}
+	result.push_back(text.substr(pos1));
+	return result;
+}
+
 static void ParseCfg_General(GeneralOptions& opts, const CfgSection& cfg)
 {
 	const CfgSection::Unordered& ceList = cfg.unord;
@@ -224,6 +243,7 @@ static void ParseCfg_ChipSection(ChipOptions& opts, const CfgSection& cfg, UINT8
 	
 	// parse muting options
 	memset(&opts.muteMask[0], 0x00, sizeof(opts.muteMask));
+	memset(&opts.panMask[0][0], 0x00, sizeof(opts.panMask));
 	for (ceoIt = ceoList.begin(); ceoIt != ceoList.end(); ++ceoIt)
 	{
 		const std::pair<std::string, std::string>& ce = *ceoIt;
@@ -425,6 +445,63 @@ static void ParseCfg_ChipSection(ChipOptions& opts, const CfgSection& cfg, UINT8
 					opts.muteMask[maskID] &= ~(1 << chnNum);
 			}
 		}	// end if (key == "Mute*")
+		else if (! stricmp(key, "PanMask"))
+		{
+			if (chipType == DEVID_YMF278B)
+				continue;
+			std::vector<std::string> panStrs = Cfg_Str2VectStr(value);
+			size_t curChn;
+			size_t chnCnt = sizeof(opts.panMask[0]) / sizeof(opts.panMask[0][0]);
+			for (curChn = 0; curChn < panStrs.size() && curChn < chnCnt; curChn ++)
+				opts.panMask[0][curChn] = strtod(panStrs[curChn].c_str(), NULL);
+		}
+		else if (! strnicmp(key, "PanMask_", 8))
+		{
+			const char* maskSpecifier = &key[8];
+			UINT8 maskID = 0xFF;
+			size_t chnStart = 0;
+			size_t chnCnt = sizeof(opts.panMask[0]) / sizeof(opts.panMask[0][0]);
+			switch(chipType)
+			{
+			case DEVID_YM2203:
+				if (! stricmp(maskSpecifier, "FM"))
+					maskID = 0;
+				else if (! stricmp(maskSpecifier, "SSG"))
+					maskID = 1;
+				break;
+			case DEVID_YM2608:
+			case DEVID_YM2610:
+				if (! stricmp(maskSpecifier, "FM"))
+				{
+					maskID = 0;
+					chnStart = 0;	chnCnt = 6;
+				}
+				else if (! stricmp(maskSpecifier, "PCM"))
+				{
+					maskID = 0;
+					chnStart = 6;	chnCnt = 7;
+				}
+				else if (! stricmp(maskSpecifier, "SSG"))
+				{
+					maskID = 1;
+				}
+				break;
+			case DEVID_YMF278B:
+				if (! stricmp(maskSpecifier, "FM"))
+					maskID = 0;
+				else if (! stricmp(maskSpecifier, "WT"))
+					maskID = 1;
+				break;
+			}
+			
+			if (maskID != 0xFF)
+			{
+				std::vector<std::string> panStrs = Cfg_Str2VectStr(value);
+				size_t curChn;
+				for (curChn = 0; curChn < panStrs.size() && curChn < chnCnt; curChn ++)
+					opts.panMask[maskID][chnStart + curChn] = strtod(panStrs[curChn].c_str(), NULL);
+			}
+		}	// end if (key == "PanMask_*")
 	}	// end for (ceoIt)
 	
 	opts.chipDisable = Cfg_GetBoolOrDefault(ceuList, "Disabled", false) ? 0x01 : 0x00;
@@ -637,7 +714,6 @@ void ApplyCfg_Chip(PlayerWrapper& player, const GeneralOptions& gOpts, const Chi
 {
 	const std::vector<PlayerBase*>& plrs = player.GetRegisteredPlayers();
 	size_t curPlr;
-	UINT8 curInst;
 	UINT8 retVal;
 	UINT32 devID;
 	
@@ -649,6 +725,8 @@ void ApplyCfg_Chip(PlayerWrapper& player, const GeneralOptions& gOpts, const Chi
 	{
 		PlayerBase* pBase = plrs[curPlr];
 		PLR_DEV_OPTS devOpts;
+		UINT8 curInst;
+		UINT8 curChn;
 		
 		retVal = pBase->GetDeviceOptions(devID, devOpts);
 		if (retVal)
@@ -661,8 +739,12 @@ void ApplyCfg_Chip(PlayerWrapper& player, const GeneralOptions& gOpts, const Chi
 		devOpts.smplRate = gOpts.chipSmplRate;
 		devOpts.coreOpts = cOpts.addOpts;
 		devOpts.muteOpts.disable = cOpts.chipDisable;
-		devOpts.muteOpts.chnMute[0] = cOpts.muteMask[0];
-		devOpts.muteOpts.chnMute[1] = cOpts.muteMask[1];
+		for (curInst = 0; curInst < 2; curInst ++)
+		{
+			devOpts.muteOpts.chnMute[curInst] = cOpts.muteMask[curInst];
+			for (curChn = 0; curChn < 32; curChn ++)
+				devOpts.panOpts.chnPan[curInst][curChn] = (INT16)(0x100 * cOpts.panMask[curInst][curChn]);
+		}
 		//printf("Player %s: Setting chip options for chip 0x%02X, instance 0x%02X\n",
 		//		pBase->GetPlayerName(), cOpts.chipType, cOpts.chipInstance);
 		if (cOpts.chipInstance != 0xFF)

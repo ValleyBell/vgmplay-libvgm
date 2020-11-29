@@ -347,6 +347,8 @@ static int IniValHandler(void* user, const char* section, const char* name, cons
 	bool ordered = false;
 	if (! strnicmp(name, "Mute", 4))
 		ordered = true;
+	else if (! strnicmp(name, "Pan", 3))
+		ordered = true;
 	
 	cfg->AddEntry(section, name, value, ordered);
 	

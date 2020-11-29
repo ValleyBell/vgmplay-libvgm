@@ -323,7 +323,7 @@ static void PreparePlayback(void)
 		fileStartPos = vgmhdr->dataOfs;
 		volGain = pow(2.0, vgmhdr->volumeGain / (double)0x100);
 		
-		// RAW Log: no loop, no/empty Creator tag, System Name IS set
+		// RAW Log: no loop, no/empty Creator tag, no Title tag
 		if (! vgmhdr->loopOfs && songTags.find("ENCODED_BY") == songTags.end() &&
 			songTags.find("TITLE") == songTags.end())
 			isRawLog = true;
