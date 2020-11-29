@@ -224,6 +224,7 @@ UINT8 PlayerMain(UINT8 showFileName)
 			else
 				continue;
 		}
+		printf("\n");
 		
 		fileEndPos = DataLoader_GetSize(dLoad);
 		EnumerateTags();	// must be done before PreparePlayback(), as it may parse some of the tags
@@ -242,7 +243,7 @@ UINT8 PlayerMain(UINT8 showFileName)
 		
 		retVal = StartDiskWriter(sfl.fileName);
 		if (retVal)
-			printf("Warning: File writer failed with error 0x%02X\n", retVal);
+			fprintf(stderr, "Warning: File writer failed with error 0x%02X\n", retVal);
 		PlayFile();
 		StopDiskWriter();
 		
@@ -303,7 +304,6 @@ static UINT8 OpenFile(const std::string& fileName, DATA_LOADER*& dLoad, PlayerBa
 		fprintf(stderr, "Unknown file format! (Error 0x%02X)\n", retVal);
 		return 0xFF;
 	}
-	printf("\n");
 	return 0x00;
 }
 
@@ -1053,10 +1053,10 @@ static DATA_LOADER* PlayerFileReqCallback(void* userParam, PlayerBase* player, c
 	std::string filePath = FindFile_Single(fileName, appSearchPaths);
 	if (filePath.empty())
 	{
-		printf("Unable to find %s!\n", fileName);
+		fprintf(stderr, "Unable to find %s!\n", fileName);
 		return NULL;
 	}
-	//printf("Player requested file - found at %s\n", filePath.c_str());
+	//fprintf(stderr, "Player requested file - found at %s\n", filePath.c_str());
 
 	DATA_LOADER* dLoad = FileLoader_Init(filePath.c_str());
 	UINT8 retVal = DataLoader_Load(dLoad);
@@ -1166,8 +1166,7 @@ static UINT8 InitAudioSystem(void)
 	else
 		drvEnable = 0x00;
 	
-	fprintf(stderr, "Opening Audio Device ...  ");
-	fflush(stderr);
+	//fprintf(stderr, "Opening Audio Device ...  ");	fflush(stderr);
 	retVal = Audio_Init();
 	if (retVal == AERR_NODRVS)
 		return retVal;
@@ -1202,7 +1201,7 @@ static UINT8 InitAudioSystem(void)
 	if (adOut.driverID != -1)
 	{
 		Audio_GetDriverInfo(adOut.driverID, &drvInfo);
-		printf("Using driver %s.\n", drvInfo->drvName);
+		//fprintf(stderr, "Using driver %s.\n", drvInfo->drvName);
 		retVal = InitAudioDriver(&adOut);
 		if (retVal)
 		{
@@ -1236,7 +1235,7 @@ static UINT8 InitAudioSystem(void)
 	if (adLog.driverID != -1)
 	{
 		Audio_GetDriverInfo(adLog.driverID, &drvInfo);
-		fprintf(stderr, "Using file writer driver %s.\n", drvInfo->drvName);
+		//fprintf(stderr, "Using file writer driver %s.\n", drvInfo->drvName);
 		retVal = InitAudioDriver(&adLog);
 		if (retVal)
 		{
@@ -1302,7 +1301,7 @@ static UINT8 StartAudioDevice(void)
 	
 	if (adOut.data != NULL)
 	{
-		printf("Opening Device %u ...\n", adOut.deviceID);
+		//fprintf(stderr, "Opening Device %u ...\n", adOut.deviceID);
 		retVal = AudioDrv_Start(adOut.data, adOut.deviceID);
 		if (retVal)
 		{
