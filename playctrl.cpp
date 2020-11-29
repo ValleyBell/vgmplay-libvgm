@@ -325,7 +325,7 @@ static void PreparePlayback(void)
 		
 		// RAW Log: no loop, no/empty Creator tag, System Name IS set
 		if (! vgmhdr->loopOfs && songTags.find("ENCODED_BY") == songTags.end() &&
-			songTags.find("SYSTEM") != songTags.end())
+			songTags.find("TITLE") == songTags.end())
 			isRawLog = true;
 		if (vgmhdr->numTicks == 0)
 			isRawLog = false;
@@ -524,6 +524,8 @@ static void ShowSongInfo(void)
 		UINT32 loopLen = player->GetLoopTicks();
 		if (sInf.loopTick != (UINT32)-1)
 			printf("Loop: Yes (%s)\n", GetTimeStr(player->Tick2Second(loopLen), -1).c_str());
+		else if (isRawLog && genOpts.fadeRawLogs)
+			printf("Loop: No (raw)\n");
 		else
 			printf("Loop: No\n");
 	}
