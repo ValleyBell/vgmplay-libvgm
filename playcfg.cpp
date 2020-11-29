@@ -595,6 +595,9 @@ static void ParseCfg_ChipSection(ChipOptions& opts, const CfgSection& cfg, UINT8
 		std::string coreStr = Cfg_GetStrOrDefault(ceuList, "Core", "");
 		if (! coreStr.empty())
 			opts.emuCore = Str2FCC(coreStr);
+		coreStr = Cfg_GetStrOrDefault(ceuList, "CoreSub", "");
+		if (! coreStr.empty())
+			opts.emuCoreSub = Str2FCC(coreStr);
 	}
 	
 	// chip-specific options
@@ -609,19 +612,11 @@ static void ParseCfg_ChipSection(ChipOptions& opts, const CfgSection& cfg, UINT8
 	case DEVID_YM2203:
 	case DEVID_YM2608:
 	case DEVID_YM2610:
-		opts.chipDisable |= Cfg_GetBoolOrDefault(ceuList, "DisableAY", false) ? 0x02 : 0x00;
-		{
-			std::string coreStr = Cfg_GetStrOrDefault(ceuList, "CoreSSG", "");
-			if (! coreStr.empty())
-				opts.emuCoreSub = Str2FCC(coreStr);
-		}
+		opts.chipDisable |= Cfg_GetBoolOrDefault(ceuList, "DisableAY", false) ? 0x02 : 0x00;	// legacy option
+		opts.chipDisable |= Cfg_GetBoolOrDefault(ceuList, "DisableSSG", false) ? 0x02 : 0x00;
 		break;
 	case DEVID_YMF278B:
-		{
-			std::string coreStr = Cfg_GetStrOrDefault(ceuList, "CoreFM", "");
-			if (! coreStr.empty())
-				opts.emuCoreSub = Str2FCC(coreStr);
-		}
+		opts.chipDisable |= Cfg_GetBoolOrDefault(ceuList, "DisableFM", false) ? 0x02 : 0x00;
 		break;
 	case DEVID_GB_DMG:
 		opts.addOpts = Cfg_GetBoolOrDefault(ceuList, "BoostWaveChn", true) ? OPT_GB_DMG_BOOST_WAVECH : 0x00;
