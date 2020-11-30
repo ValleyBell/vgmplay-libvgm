@@ -180,6 +180,9 @@ UINT8 PlayerMain(UINT8 showFileName)
 		ApplyCfg_Chip(myPlayer, genOpts, cOpt);
 	}
 	
+#ifndef _WIN32
+	changemode(1);
+#endif
 	//resVal = 0;
 	controlVal = +1;	// default: next song
 	for (curSong = 0; curSong < songList.size(); )
@@ -256,6 +259,9 @@ UINT8 PlayerMain(UINT8 showFileName)
 		if (! AdvanceSongList(curSong, controlVal))
 			break;
 	}	// end for(curSong)
+#ifndef _WIN32
+	changemode(0);
+#endif
 	
 	myPlayer.UnregisterAllPlayers();
 	
@@ -626,9 +632,6 @@ static UINT8 PlayFile(void)
 	else
 		retVal = 0xFF;
 	manualRenderLoop = (retVal != AERR_OK);
-#ifndef _WIN32
-	changemode(1);
-#endif
 	controlVal = 0;
 	playState &= ~PLAYSTATE_END;
 	needRefresh = true;
@@ -695,9 +698,6 @@ static UINT8 PlayFile(void)
 			}
 		}
 	}
-#ifndef _WIN32
-	changemode(0);
-#endif
 	// remove callback to prevent further rendering
 	// also waits for render thread to finish its work
 	if (adOut.data != NULL)
