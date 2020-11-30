@@ -48,7 +48,7 @@ extern UINT8 PlayerMain(UINT8 showFileName);
 
 
 #define APP_NAME		"VGM Player"
-#define VGMPLAY_VER_STR	"0.5.0"
+#define VGMPLAY_VER_STR	"0.50.0"
 #define VGM_VER_STR		"1.71b"
 
 
