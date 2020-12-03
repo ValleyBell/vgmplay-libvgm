@@ -57,6 +57,7 @@ struct AudioDriver
 
 UINT8 PlayerMain(UINT8 showFileName);
 static bool AdvanceSongList(size_t& songIdx, int controlVal);
+static DATA_LOADER* GetFileLoaderUTF8(const std::string& fileName);
 static UINT8 OpenFile(const std::string& fileName, DATA_LOADER*& dLoad, PlayerBase*& player);
 static void PreparePlayback(void);
 static void Tags_RemoveEmpty(std::map<std::string, std::string>& tags);
@@ -193,7 +194,7 @@ UINT8 PlayerMain(UINT8 showFileName)
 		
 		if (fnShowMode == 1)
 		{
-			printf("File Name:      %s\n", sfl.fileName.c_str());
+			u8printf("File Name:      %s\n", sfl.fileName.c_str());
 		}
 		else if (fnShowMode == 0)
 		{
@@ -207,11 +208,11 @@ UINT8 PlayerMain(UINT8 showFileName)
 			else
 			{
 				const PlaylistFileList& pfl = plList[sfl.playlistID];
-				printf("Playlist File:  %s\n", pfl.fileName.c_str());
+				u8printf("Playlist File:  %s\n", pfl.fileName.c_str());
 				//printf("Playlist File:  %s [song %u/%u]\n", pfl.fileName.c_str(),
 				//	1 + (unsigned)sfl.playlistSongID, (unsigned)pfl.songCount);
 			}
-			printf("File Name:      [%*u/%u] %s\n", count_digits((int)songList.size()), 1 + (unsigned)curSong,
+			u8printf("File Name:      [%*u/%u] %s\n", count_digits((int)songList.size()), 1 + (unsigned)curSong,
 				(unsigned)songList.size(), sfl.fileName.c_str());
 		}
 		fflush(stdout);
@@ -288,11 +289,28 @@ static bool AdvanceSongList(size_t& songIdx, int controlVal)
 	return true;
 }
 
+static DATA_LOADER* GetFileLoaderUTF8(const std::string& fileNameU8)
+{
+#ifndef _WIN32
+	return FileLoader_Init(fileNameUTF8.c_str());
+#else
+	int bufSize = MultiByteToWideChar(CP_UTF8, 0, fileNameU8.c_str(), fileNameU8.size(), NULL, 0);
+	std::wstring fileNameW(bufSize, '\0');
+	MultiByteToWideChar(CP_UTF8, 0, fileNameU8.c_str(), fileNameU8.size(), &fileNameW[0], bufSize);
+	
+	bufSize = WideCharToMultiByte(CP_UTF8, 0, fileNameW.c_str(), fileNameW.size(), NULL, 0, NULL, NULL);
+	std::string fileName(bufSize, '\0');
+	WideCharToMultiByte(CP_ACP, 0, fileNameW.c_str(), fileNameW.size(), &fileName[0], bufSize, NULL, NULL);
+	
+	return FileLoader_Init(fileName.c_str());
+#endif
+}
+
 static UINT8 OpenFile(const std::string& fileName, DATA_LOADER*& dLoad, PlayerBase*& player)
 {
 	UINT8 retVal;
 	
-	dLoad = FileLoader_Init(fileName.c_str());
+	dLoad = GetFileLoaderUTF8(fileName);
 	if (dLoad == NULL)
 		return 0xFF;
 	DataLoader_SetPreloadBytes(dLoad, 0x100);
