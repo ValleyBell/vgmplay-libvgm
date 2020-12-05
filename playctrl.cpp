@@ -26,7 +26,6 @@ extern "C" int __cdecl _kbhit(void);
 #include <common_def.h>	// for INLINE
 #include <utils/DataLoader.h>
 #include <utils/FileLoader.h>
-#include <utils/MemoryLoader.h>
 #include <player/playerbase.hpp>
 #include <player/s98player.hpp>
 #include <player/droplayer.hpp>
@@ -36,6 +35,7 @@ extern "C" int __cdecl _kbhit(void);
 #include <emu/SoundDevs.h>
 #include <emu/SoundEmu.h>	// for SndEmu_GetDevName()
 #include <utils/OSMutex.h>
+#include <utils/StrUtils.h>
 
 #include "utils.hpp"
 #include "config.hpp"
@@ -115,6 +115,13 @@ static AudioDriver adLog = {ADRVTYPE_DISK, -1, "", 0, 0, NULL};
 static std::vector<UINT8> audioBuf;
 static OS_MUTEX* renderMtx;	// render thread mutex
 
+#ifdef _WIN32
+static CPCONV* cpcU8_Wide;
+#if ! HAVE_FILELOADER_W
+static CPCONV* cpcU8_ACP;
+#endif
+#endif
+
 static bool manualRenderLoop = false;
 static bool dummyRenderAtLoad = false;
 static volatile UINT8 playState;
@@ -164,6 +171,17 @@ UINT8 PlayerMain(UINT8 showFileName)
 		return 1;
 	}
 	playState = 0x00;
+	
+#ifdef _WIN32
+	retVal = CPConv_Init(&cpcU8_Wide, "UTF-8", "UTF-16LE");
+#if ! HAVE_FILELOADER_W
+	{
+		std::string cpName(0x10, '\0');
+		snprintf(&cpName[0], cpName.size(), "CP%u", GetACP());
+		retVal = CPConv_Init(&cpcU8_ACP, "UTF-8", cpName.c_str());
+	}
+#endif
+#endif
 	
 	// I'll keep the instances of the players for the program's life time.
 	// This way player/chip options are kept between track changes.
@@ -266,6 +284,13 @@ UINT8 PlayerMain(UINT8 showFileName)
 	
 	myPlayer.UnregisterAllPlayers();
 	
+#ifdef _WIN32
+	CPConv_Deinit(cpcU8_Wide);
+#if ! HAVE_FILELOADER_W
+	CPConv_Deinit(cpcU8_ACP);
+#endif
+#endif
+	
 	StopAudioDevice();
 	DeinitAudioSystem();
 	
@@ -294,15 +319,27 @@ static DATA_LOADER* GetFileLoaderUTF8(const std::string& fileNameU8)
 #ifndef _WIN32
 	return FileLoader_Init(fileNameUTF8.c_str());
 #else
-	int bufSize = MultiByteToWideChar(CP_UTF8, 0, fileNameU8.c_str(), fileNameU8.size(), NULL, 0);
-	std::wstring fileNameW(bufSize, '\0');
-	MultiByteToWideChar(CP_UTF8, 0, fileNameU8.c_str(), fileNameU8.size(), &fileNameW[0], bufSize);
-	
-	bufSize = WideCharToMultiByte(CP_UTF8, 0, fileNameW.c_str(), fileNameW.size(), NULL, 0, NULL, NULL);
-	std::string fileName(bufSize, '\0');
-	WideCharToMultiByte(CP_ACP, 0, fileNameW.c_str(), fileNameW.size(), &fileName[0], bufSize, NULL, NULL);
-	
-	return FileLoader_Init(fileName.c_str());
+#if HAVE_FILELOADER_W
+	size_t fileNameWLen = 0;
+	wchar_t* fileNameWStr = NULL;
+	UINT8 retVal = CPConv_StrConvert(cpcU8_Wide, &fileNameWLen, reinterpret_cast<char**>(&fileNameWStr),
+		fileNameU8.length() + 1, fileNameU8.c_str());	// length()+1 to include the \0
+	DATA_LOADER* dLoad = NULL;
+	if (retVal < 0x80)
+		dLoad = FileLoader_InitW(fileNameWStr);
+	free(fileNameWStr);
+	return dLoad;
+#else
+	size_t fileNameALen = 0;
+	char* fileNameAStr = NULL;
+	UINT8 retVal = CPConv_StrConvert(cpcU8_ACP, &fileNameALen, &fileNameAStr,
+		fileNameU8.length() + 1, fileNameU8.c_str());	// length()+1 to include the \0
+	DATA_LOADER* dLoad = NULL;
+	if (retVal < 0x80)
+		dLoad = FileLoader_Init(fileNameAStr);
+	free(fileNameAStr);
+	return dLoad;
+#endif
 #endif
 }
 
@@ -608,11 +645,13 @@ static void ShowConsoleTitle(const std::string& fileName, const std::string& tit
 	titleStr = titleStr + " - " + APP_NAME;
 	
 #ifdef WIN32
-	int bufSize = MultiByteToWideChar(CP_UTF8, 0, titleStr.c_str(), titleStr.size(), NULL, 0);
-	std::wstring titleWStr(bufSize, '\0');
-	MultiByteToWideChar(CP_UTF8, 0, titleStr.c_str(), titleStr.size(), &titleWStr[0], bufSize);
-	
-	SetConsoleTitleW(titleWStr.c_str());		// Set Windows Console Title
+	size_t titleWLen = 0;
+	wchar_t* titleWStr = NULL;
+	UINT8 retVal = CPConv_StrConvert(cpcU8_Wide, &titleWLen, reinterpret_cast<char**>(&titleWStr),
+		titleStr.length() + 1, titleStr.c_str());	// length()+1 to include the \0
+	if (retVal != NULL)
+		SetConsoleTitleW(titleWStr);		// Set Windows Console Title
+	free(titleWStr);
 #else
 	printf("\x1B]0;%s\x07", titleStr.c_str());	// Set xterm/rxvt Terminal Title
 #endif
