@@ -4,10 +4,10 @@
 #include <fstream>
 #include <istream>
 #ifdef _WIN32
-#include <Windows.h>
-#else
-#include <iconv.h>
+#include <Windows.h>	// for file name charset conversion
+#include <wchar.h>	// for UTF-16 file name functions
 #endif
+#include <utils/StrUtils.h>
 
 #include "stdtype.h"
 #include "utils.hpp"
@@ -30,7 +30,6 @@ static const UINT8 UTF8_SIG[] = {0xEF, 0xBB, 0xBF};
 //UINT8 ParseSongFiles(const std::vector<std::string>& args, std::vector<SongFileList>& songList, std::vector<PlaylistFileList>& playlistList);
 //UINT8 ParseSongFiles(size_t argc, const char* const* argv, std::vector<SongFileList>& songList, std::vector<PlaylistFileList>& playlistList);
 static bool ReadM3UPlaylist(const char* fileName, std::vector<SongFileList>& songList, bool isM3Uu8);
-static std::string WinStr2UTF8(const std::string& str);
 
 
 UINT8 ParseSongFiles(const std::vector<char*>& args, std::vector<SongFileList>& songList, std::vector<PlaylistFileList>& playlistList)
@@ -108,7 +107,6 @@ static bool ReadM3UPlaylist(const char* fileName, std::vector<SongFileList>& son
 {
 	std::ifstream hFile;
 	std::string baseDir;
-	const char* strPtr;
 	char fileSig[0x03];
 	bool isUTF8;
 	bool isV2Fmt;
@@ -116,8 +114,10 @@ static bool ReadM3UPlaylist(const char* fileName, std::vector<SongFileList>& son
 	UINT32 lineNo;
 	std::string tempStr;
 	size_t songID;
+	CPCONV* cpcU8;
 	
-#if defined(WIN32) && _MSC_VER >= 1400
+#if defined(_WIN32) && ! defined(_MSC_VER) || _MSC_VER >= 1400
+	// not using libvgm CPConv here, because using WinAPIs doesn't need separate initialization
 	std::wstring fileNameW;
 	fileNameW.resize(MultiByteToWideChar(CP_UTF8, 0, fileName, -1, NULL, 0) - 1);
 	MultiByteToWideChar(CP_UTF8, 0, fileName, -1, &fileNameW[0], fileNameW.size());
@@ -128,15 +128,18 @@ static bool ReadM3UPlaylist(const char* fileName, std::vector<SongFileList>& son
 	if (! hFile.is_open())
 		return false;
 	
-	strPtr = GetFileTitle(fileName);
-	baseDir = std::string(fileName, strPtr - fileName);
+	baseDir = std::string(fileName, GetFileTitle(fileName) - fileName);
 	
 	memset(fileSig, 0x00, 3);
 	hFile.read(fileSig, 3);
-	isUTF8 = ! memcmp(fileSig, UTF8_SIG, 3);
+	isUTF8 = ! memcmp(fileSig, UTF8_SIG, 3);	// check for UTF-8 BOM
 	if (! isUTF8)
 		hFile.seekg(0, std::ios_base::beg);
 	isUTF8 |= isM3Uu8;
+	
+	cpcU8 = NULL;
+	if (! isUTF8)
+		CPConv_Init(&cpcU8, "CP1252", "UTF-8");
 	
 	isV2Fmt = false;
 	METASTR_LEN = strlen(M3UV2_META);
@@ -164,8 +167,15 @@ static bool ReadM3UPlaylist(const char* fileName, std::vector<SongFileList>& son
 			continue;
 		}
 		
-		if (! isUTF8)
-			tempStr = WinStr2UTF8(tempStr);
+		if (cpcU8 != NULL)
+		{
+			size_t tempU8Len = 0;
+			char* tempU8Str = NULL;
+			UINT8 retVal = CPConv_StrConvert(cpcU8, &tempU8Len, &tempU8Str, tempStr.length(), tempStr.c_str());
+			if (retVal < 0x80)
+				tempStr.assign(tempU8Str, tempU8Str + tempU8Len);
+			free(tempU8Str);
+		}
 		// at this point, we should have UTF-8 file names
 		
 		SongFileList sfl;
@@ -179,35 +189,10 @@ static bool ReadM3UPlaylist(const char* fileName, std::vector<SongFileList>& son
 		songID ++;
 	}
 	
+	if (cpcU8 != NULL)
+		CPConv_Deinit(cpcU8);
+	
 	hFile.close();
 	
 	return true;
-}
-
-static std::string WinStr2UTF8(const std::string& str)
-{
-#ifdef _WIN32
-	std::wstring wtemp;
-	std::string out;
-	int numChars;
-	
-	// char -> wchar_t using local ANSI codepage
-	numChars = MultiByteToWideChar(CP_ACP, 0, str.c_str(), -1, NULL, 0);
-	if (numChars < 0)
-		return out;
-	wtemp.resize(numChars - 1);
-	MultiByteToWideChar(CP_ACP, 0, str.c_str(), -1, &wtemp[0], wtemp.size());
-	
-	// convert wchar_t to char UTF-8
-	numChars = WideCharToMultiByte(CP_UTF8, 0, wtemp.c_str(), -1, NULL, 0, NULL, NULL);
-	if (numChars < 0)
-		return out;
-	out.resize(numChars - 1);
-	WideCharToMultiByte(CP_UTF8, 0, wtemp.c_str(), -1, &out[0], out.size(), NULL, NULL);
-	
-	return out;
-#else
-	// TODO: handle Windows codepages
-	return str;
-#endif
 }
