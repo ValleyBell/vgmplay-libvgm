@@ -30,6 +30,7 @@ extern "C" int __cdecl _kbhit(void);
 #include <player/s98player.hpp>
 #include <player/droplayer.hpp>
 #include <player/vgmplayer.hpp>
+#include <player/playera.hpp>
 #include <audio/AudioStream.h>
 #include <audio/AudioStream_SpcDrvFuns.h>
 #include <emu/SoundDevs.h>
@@ -41,7 +42,6 @@ extern "C" int __cdecl _kbhit(void);
 #include "config.hpp"
 #include "m3uargparse.hpp"
 #include "playcfg.hpp"
-#include "player.hpp"
 
 
 struct AudioDriver
@@ -141,10 +141,10 @@ static size_t curSong;
 
 static GeneralOptions genOpts;
 static ChipOptions chipOpts[0x100];
-static PlayerWrapper myPlayer;
+static PlayerA myPlayer;
 static std::map<std::string, std::string> songTags;
 
-INLINE UINT32 MSec2Samples(UINT32 val, const PlayerWrapper& player)
+INLINE UINT32 MSec2Samples(UINT32 val, const PlayerA& player)
 {
 	return (UINT32)(((UINT64)val * player.GetSampleRate() + 500) / 1000);
 }
@@ -413,7 +413,7 @@ static void PreparePlayback(void)
 		isRawLog = true;
 	}
 	
-	PlrWrapConfig pwCfg = myPlayer.GetConfiguration();
+	PlayerA::Config pwCfg = myPlayer.GetConfiguration();
 	pwCfg.masterVol = (INT32)(0x10000 * volGain * genOpts.volume + 0.5);
 	myPlayer.SetConfiguration(pwCfg);
 	
@@ -1062,7 +1062,7 @@ static std::string GetTimeStr(double seconds, INT8 showHours)
 
 static UINT32 FillBuffer(void* drvStruct, void* userParam, UINT32 bufSize, void* data)
 {
-	PlayerWrapper* myPlr = (PlayerWrapper*)userParam;
+	PlayerA* myPlr = (PlayerA*)userParam;
 	if (! (myPlr->GetState() & PLAYSTATE_PLAY))
 	{
 		fprintf(stderr, "Player Warning: calling Render while not playing! playState = 0x%02X\n", myPlr->GetState());
@@ -1378,7 +1378,7 @@ static UINT8 StartAudioDevice(void)
 	}
 	
 	audioBuf.resize(localBufSize);
-	myPlayer.PrepareRendering(opts, smplAlloc);
+	myPlayer.SetOutputSettings(opts->sampleRate, opts->numChannels, opts->numBitsPerSmpl, smplAlloc);
 	
 	return AERR_OK;
 }

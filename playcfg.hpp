@@ -1,3 +1,6 @@
+#ifndef __PLAYCFG_HPP__
+#define __PLAYCFG_HPP__
+
 #include <stdtype.h>
 #include <string>
 
@@ -46,9 +49,11 @@ struct ChipOptions
 };
 
 class Configuration;
-class PlayerWrapper;
+class PlayerA;
 
 
 void ParseConfiguration(GeneralOptions& gOpts, size_t cOptCnt, ChipOptions* cOpts, const Configuration& cfg);
-void ApplyCfg_General(PlayerWrapper& player, const GeneralOptions& opts);
-void ApplyCfg_Chip(PlayerWrapper& player, const GeneralOptions& gOpts, const ChipOptions& cOpts);
+void ApplyCfg_General(PlayerA& player, const GeneralOptions& opts);
+void ApplyCfg_Chip(PlayerA& player, const GeneralOptions& gOpts, const ChipOptions& cOpts);
+
+#endif	// __PLAYCFG_HPP__

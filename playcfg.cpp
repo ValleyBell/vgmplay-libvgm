@@ -16,6 +16,7 @@
 #include <player/s98player.hpp>
 #include <player/droplayer.hpp>
 #include <player/vgmplayer.hpp>
+#include <player/playera.hpp>
 #include <emu/SoundDevs.h>
 // libvgm-emu headers for configuration
 #include <emu/EmuCores.h>
@@ -29,7 +30,6 @@
 
 #include "config.hpp"
 #include "playcfg.hpp"
-#include "player.hpp"
 
 
 struct ChipCfgSectDef
@@ -56,8 +56,8 @@ static std::vector<std::string> Cfg_Str2VectStr(const std::string& text);
 static void ParseCfg_General(GeneralOptions& opts, const CfgSection& cfg);
 static void ParseCfg_ChipSection(ChipOptions& opts, const CfgSection& cfg, UINT8 chipType);
 
-//void ApplyCfg_General(PlayerWrapper& player, const GeneralOptions& opts);
-//void ApplyCfg_Chip(PlayerWrapper& player, const GeneralOptions& gOpts, const ChipOptions& cOpts);
+//void ApplyCfg_General(PlayerA& player, const GeneralOptions& opts);
+//void ApplyCfg_Chip(PlayerA& player, const GeneralOptions& gOpts, const ChipOptions& cOpts);
 
 
 static const ChipCfgSectDef CFG_CHIP_LIST[] =
@@ -642,12 +642,12 @@ static void ParseCfg_ChipSection(ChipOptions& opts, const CfgSection& cfg, UINT8
 }
 
 
-void ApplyCfg_General(PlayerWrapper& player, const GeneralOptions& opts)
+void ApplyCfg_General(PlayerA& player, const GeneralOptions& opts)
 {
 	const std::vector<PlayerBase*>& plrs = player.GetRegisteredPlayers();
 	size_t curPlr;
 	UINT8 retVal;
-	PlrWrapConfig pwCfg;
+	PlayerA::Config pwCfg;
 	
 	pwCfg = player.GetConfiguration();
 	pwCfg.masterVol = (INT32)(0x10000 * opts.volume + 0.5);
@@ -705,7 +705,7 @@ static UINT8 ConvertChipSmplModeOption(UINT8 devID, UINT8 option)
 	}
 }
 
-void ApplyCfg_Chip(PlayerWrapper& player, const GeneralOptions& gOpts, const ChipOptions& cOpts)
+void ApplyCfg_Chip(PlayerA& player, const GeneralOptions& gOpts, const ChipOptions& cOpts)
 {
 	const std::vector<PlayerBase*>& plrs = player.GetRegisteredPlayers();
 	size_t curPlr;
