@@ -427,19 +427,6 @@ static void PreparePlayback(void)
 	return;
 }
 
-static void Tags_RemoveEmpty(std::map<std::string, std::string>& tags)
-{
-	std::map<std::string, std::string>::iterator tagIt;
-	for (tagIt = tags.begin(); tagIt != tags.end(); )
-	{
-		if (tagIt->second.empty())
-			tagIt = tags.erase(tagIt);
-		else
-			++tagIt;
-	}
-	return;
-}
-
 static void Tags_LangFilter(std::map<std::string, std::string>& tags, const std::string& tagName,
 	const std::vector<std::string>& langPostfixes, int defaultLang)
 {
@@ -476,7 +463,7 @@ static void Tags_LangFilter(std::map<std::string, std::string>& tags, const std:
 	{
 		if (*ltIt == tagName)
 			continue;
-		tags.erase(*ltIt);
+		tags.erase(*ltIt);	// TODO: iterator handling
 	}
 	
 	return;
@@ -500,9 +487,11 @@ static void EnumerateTags(void)
 		return;
 	
 	for (const char* const* t = tagList; *t != NULL; t += 2)
+	{
+		if (t[1][0] == '\0')
+			continue;	// skip empty VGM tags, else the LangFilter may choose them
 		songTags[t[0]] = t[1];
-	
-	Tags_RemoveEmpty(songTags);	// need to remove empty VGM tags, else the LangFilter may choose them
+	}
 	
 	langPostfixes.push_back("");
 	langPostfixes.push_back("-JPN");
