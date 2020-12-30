@@ -60,7 +60,6 @@ static bool AdvanceSongList(size_t& songIdx, int controlVal);
 static DATA_LOADER* GetFileLoaderUTF8(const std::string& fileName);
 static UINT8 OpenFile(const std::string& fileName, DATA_LOADER*& dLoad, PlayerBase*& player);
 static void PreparePlayback(void);
-static void Tags_RemoveEmpty(std::map<std::string, std::string>& tags);
 static void Tags_LangFilter(std::map<std::string, std::string>& tags, const std::string& tagName,
 	const std::vector<std::string>& langPostfixes, int defaultLang);
 static const char* GetTagForDisp(const std::map<std::string, std::string>& tags, const std::string& tagName);
@@ -189,7 +188,7 @@ UINT8 PlayerMain(UINT8 showFileName)
 	myPlayer.RegisterPlayerEngine(new S98Player);
 	myPlayer.RegisterPlayerEngine(new DROPlayer);
 	myPlayer.SetEventCallback(FilePlayCallback, NULL);
-	myPlayer.SetFileReqCallback(&PlayerFileReqCallback, NULL);
+	myPlayer.SetFileReqCallback(PlayerFileReqCallback, NULL);
 	ApplyCfg_General(myPlayer, genOpts);
 	for (size_t curChp = 0; curChp < 0x100; curChp ++)
 	{
@@ -248,7 +247,7 @@ UINT8 PlayerMain(UINT8 showFileName)
 		}
 		printf("\n");
 		
-		fileEndPos = DataLoader_GetSize(dLoad);
+		fileEndPos = myPlayer.GetFileSize();
 		EnumerateTags();	// must be done before PreparePlayback(), as it may parse some of the tags
 		PreparePlayback();
 		
@@ -355,6 +354,7 @@ static UINT8 OpenFile(const std::string& fileName, DATA_LOADER*& dLoad, PlayerBa
 	if (retVal)
 	{
 		DataLoader_CancelLoading(dLoad);
+		DataLoader_Deinit(dLoad);
 		fprintf(stderr, "Error 0x%02X opening file!\n", retVal);
 		return 0xFF;
 	}
@@ -362,6 +362,7 @@ static UINT8 OpenFile(const std::string& fileName, DATA_LOADER*& dLoad, PlayerBa
 	if (retVal)
 	{
 		DataLoader_CancelLoading(dLoad);
+		DataLoader_Deinit(dLoad);
 		fprintf(stderr, "Unknown file format! (Error 0x%02X)\n", retVal);
 		return 0xFF;
 	}
@@ -413,9 +414,8 @@ static void PreparePlayback(void)
 		isRawLog = true;
 	}
 	
-	PlayerA::Config pwCfg = myPlayer.GetConfiguration();
-	pwCfg.masterVol = (INT32)(0x10000 * volGain * genOpts.volume + 0.5);
-	myPlayer.SetConfiguration(pwCfg);
+	INT32 volume = (INT32)(0x10000 * volGain * genOpts.volume + 0.5);
+	myPlayer.SetMasterVolume(volume);
 	
 	// last song: fadeTime_single, others: fadeTime_plist
 	timeMS = (curSong + 1 == songList.size()) ? genOpts.fadeTime_single : genOpts.fadeTime_plist;
@@ -601,10 +601,10 @@ static void ShowSongInfo(void)
 	{
 		const PLR_DEV_INFO& pdi = diList[curDev];
 		const char* chipName;
-		unsigned int drvCnt = 1;
+		unsigned int devCnt = 1;
 		
 		chipName = SndEmu_GetDevName(pdi.type, 0x01, pdi.devCfg);
-		for (drvCnt = 1; curDev + 1 < diList.size(); curDev ++, drvCnt ++)
+		for (devCnt = 1; curDev + 1 < diList.size(); curDev ++, devCnt ++)
 		{
 			const PLR_DEV_INFO& pdi1 = diList[curDev + 1];
 			const char* chipName1 = SndEmu_GetDevName(pdi1.type, 0x01, pdi1.devCfg);
@@ -615,11 +615,11 @@ static void ShowSongInfo(void)
 		}
 		if (pdi.type == DEVID_SN76496)
 		{
-			if (pdi.devCfg->flags && drvCnt > 1)
-				drvCnt /= 2;	// the T6W28 consists of two "half" chips in VGMs
+			if (pdi.devCfg->flags && devCnt > 1)
+				devCnt /= 2;	// the T6W28 consists of two "half" chips in VGMs
 		}
-		if (drvCnt > 1)
-			printf("%ux", drvCnt);
+		if (devCnt > 1)
+			printf("%ux", devCnt);
 		if (genOpts.showDevCore)
 			printf("%s (%s), ", chipName, FCC2Str(pdi.core).c_str());
 		else

@@ -44,6 +44,7 @@
 #endif
 
 
+// from playctrl.cpp
 extern UINT8 PlayerMain(UINT8 showFileName);
 
 

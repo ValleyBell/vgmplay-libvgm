@@ -137,8 +137,8 @@ void ParseConfiguration(GeneralOptions& gOpts, size_t cOptCnt, ChipOptions* cOpt
 
 static inline UINT32 Str2FCC(const std::string& fcc)
 {
-	char buf[4];
-	strncpy(buf, fcc.c_str(), 4);
+	UINT8 buf[4];
+	strncpy((char*)buf, fcc.c_str(), 4);
 	return	(buf[0] << 24) | (buf[1] << 16) |
 			(buf[2] <<  8) | (buf[3] <<  0);
 }
@@ -583,6 +583,7 @@ static void ParseCfg_ChipSection(ChipOptions& opts, const CfgSection& cfg, UINT8
 				opts.emuCore = FCC_CTR_;
 			else if (emuType == 1)
 				opts.emuCore = FCC_MAME;
+			break;
 		case DEVID_SAA1099:
 			if (emuType == 0)
 				opts.emuCore = FCC_VBEL;
