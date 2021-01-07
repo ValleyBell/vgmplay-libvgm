@@ -1,3 +1,7 @@
+// TODO:
+//	xx showStrmCmds ("ShowStreamCmds")
+//	xx soundWhilePaused ("EmulatePause")
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>	// for memcmp()
@@ -38,6 +42,7 @@
 #include "utils.hpp"
 #include "m3uargparse.hpp"
 #include "config.hpp"
+#include "version.h"
 
 #ifndef SHARE_PREFIX
 #define SHARE_PREFIX	"/usr"
@@ -46,11 +51,6 @@
 
 // from playctrl.cpp
 extern UINT8 PlayerMain(UINT8 showFileName);
-
-
-#define APP_NAME		"VGM Player"
-#define VGMPLAY_VER_STR	"0.50.0"
-#define VGM_VER_STR		"1.71b"
 
 
 struct OptionItem

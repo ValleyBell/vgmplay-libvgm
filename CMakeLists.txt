@@ -104,6 +104,7 @@ set(PLAYER_HEADERS
 	config.hpp
 	m3uargparse.hpp
 	playcfg.hpp
+	version.h
 )
 set(PLAYER_FILES
 	utils.cpp

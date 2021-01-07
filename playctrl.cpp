@@ -42,6 +42,7 @@ extern "C" int __cdecl _kbhit(void);
 #include "config.hpp"
 #include "m3uargparse.hpp"
 #include "playcfg.hpp"
+#include "version.h"
 
 
 struct AudioDriver
@@ -91,9 +92,6 @@ static int _kbhit(void);
 #endif
 static void cls(void);
 
-
-#define APP_NAME	"VGM Player"
-#define APP_NAME_L	L"VGM Player"
 
 // NCurses-like key constants
 #define KEY_DOWN		0x102		// cursor down
