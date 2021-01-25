@@ -43,6 +43,7 @@ extern "C" int __cdecl _kbhit(void);
 #include "m3uargparse.hpp"
 #include "playcfg.hpp"
 #include "version.h"
+#include "mmkeys.h"
 
 
 struct AudioDriver
@@ -58,6 +59,7 @@ struct AudioDriver
 
 UINT8 PlayerMain(UINT8 showFileName);
 static bool AdvanceSongList(size_t& songIdx, int controlVal);
+static void MMKey_Event(UINT8 event);
 static DATA_LOADER* GetFileLoaderUTF8(const std::string& fileName);
 static UINT8 OpenFile(const std::string& fileName, DATA_LOADER*& dLoad, PlayerBase*& player);
 static void PreparePlayback(void);
@@ -70,6 +72,7 @@ static void ShowConsoleTitle(const std::string& fileName, const std::string& tit
 static UINT8 PlayFile(void);
 static int GetPressedKey(void);
 static UINT8 HandleKeyPress(bool waitForKey);
+static UINT8 HandleMediaKeyPress(void);
 static inline std::string FCC2Str(UINT32 fcc);
 static INT8 GetTimeDispMode(double seconds);
 static std::string GetTimeStr(double seconds, INT8 showHours = 0);
@@ -135,6 +138,7 @@ extern std::vector<PlaylistFileList> plList;
 
 static int controlVal;
 static size_t curSong;
+static UINT8 lastMMEvent = 0x00;
 
 static GeneralOptions genOpts;
 static ChipOptions chipOpts[0x100];
@@ -195,6 +199,9 @@ UINT8 PlayerMain(UINT8 showFileName)
 			continue;
 		ApplyCfg_Chip(myPlayer, genOpts, cOpt);
 	}
+	
+	MultimediaKeyHook_Init();
+	MultimediaKeyHook_SetCallback(&MMKey_Event);
 	
 #ifndef _WIN32
 	changemode(1);
@@ -278,6 +285,7 @@ UINT8 PlayerMain(UINT8 showFileName)
 #ifndef _WIN32
 	changemode(0);
 #endif
+	MultimediaKeyHook_Deinit();
 	
 	myPlayer.UnregisterAllPlayers();
 	
@@ -309,6 +317,13 @@ static bool AdvanceSongList(size_t& songIdx, int controlVal)
 			curSong --;
 	}
 	return true;
+}
+
+static void MMKey_Event(UINT8 event)
+{
+	lastMMEvent = event;
+	
+	return;
 }
 
 static DATA_LOADER* GetFileLoaderUTF8(const std::string& fileNameU8)
@@ -721,7 +736,9 @@ static UINT8 PlayFile(void)
 			Sleep(50);
 		}
 		
-		retVal = HandleKeyPress(false);
+		retVal = HandleMediaKeyPress();
+		if (! retVal)
+			retVal = HandleKeyPress(false);
 		if (retVal)
 		{
 			needRefresh = true;
@@ -915,8 +932,10 @@ static UINT8 HandleKeyPress(bool waitForKey)
 		if (! (playState & PLAYSTATE_PLAY))
 			break;
 		// enforce "non-playlist" fade-out
+		OSMutex_Lock(renderMtx);
 		myPlayer.SetFadeSamples(MSec2Samples(genOpts.fadeTime_single, myPlayer));
 		myPlayer.FadeOut();
+		OSMutex_Unlock(renderMtx);
 		break;
 	case 'R':	// restart
 		if (! (playState & PLAYSTATE_PLAY))
@@ -952,22 +971,18 @@ static UINT8 HandleKeyPress(bool waitForKey)
 		break;
 	case 'B':	// previous file (back)
 	case KEY_PPAGE:
-		if (curSong > 0)
-		{
-			playState |= PLAYSTATE_END;
-			controlVal = -1;
-			return 0x10;
-		}
-		break;
+		if (curSong <= 0)
+			break;
+		playState |= PLAYSTATE_END;
+		controlVal = -1;
+		return 0x10;
 	case 'N':	// next file
 	case KEY_NPAGE:
-		if (curSong + 1 < songList.size())
-		{
-			playState |= PLAYSTATE_END;
-			controlVal = +1;
-			return 0x10;
-		}
-		break;
+		if (curSong + 1 >= songList.size())
+			break;
+		playState |= PLAYSTATE_END;
+		controlVal = +1;
+		return 0x10;
 	default:
 		if (keyCode >= '0' && keyCode <= '9')
 		{
@@ -986,6 +1001,48 @@ static UINT8 HandleKeyPress(bool waitForKey)
 			OSMutex_Unlock(renderMtx);
 		}
 		break;
+	}
+	
+	return 0x01;
+}
+
+static UINT8 HandleMediaKeyPress(void)
+{
+	if (! lastMMEvent)
+		return 0;
+	
+	UINT8 evtCode = lastMMEvent;
+	lastMMEvent = 0x00;
+	switch(evtCode)
+	{
+	case MMKEY_PLAY:	// pause
+		if (! (playState & PLAYSTATE_PLAY))
+			break;
+		playState ^= PLAYSTATE_PAUSE;
+		/*if (genOpts.soundWhilePaused)
+		{
+			// TODO
+		}
+		else*/ if (adOut.data != NULL)
+		{
+			if (playState & PLAYSTATE_PAUSE)
+				AudioDrv_Pause(adOut.data);
+			else
+				AudioDrv_Resume(adOut.data);
+		}
+		break;
+	case MMKEY_PREV:	// previous file (back)
+		if (curSong <= 0)
+			break;
+		playState |= PLAYSTATE_END;
+		controlVal = -1;
+		return 0x10;
+	case MMKEY_NEXT:	// next file
+		if (curSong + 1 >= songList.size())
+			break;
+		playState |= PLAYSTATE_END;
+		controlVal = +1;
+		return 0x10;
 	}
 	
 	return 0x01;

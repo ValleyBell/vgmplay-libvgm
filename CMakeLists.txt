@@ -62,6 +62,9 @@ set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_C_FLAGS_RELEASE}")
 endif(CMAKE_COMPILER_IS_GNUCC)
 
 
+set(MEDIA_CONTROLS "OFF" CACHE STRING "enable Media Controls")
+set_property(CACHE MEDIA_CONTROLS PROPERTY STRINGS "OFF;WIN_KEYS;WIN_OVERLAY;DBUS")
+
 
 # --- INI reading ---
 set(INIH_DIR libs/inih)
@@ -107,6 +110,14 @@ set(PLAYER_FILES
 	playctrl.cpp
 	playcfg.cpp
 )
+
+# media control
+list(APPEND PLAYER_HEADERS mmkeys.h)
+if (MEDIA_CONTROLS STREQUAL "WIN_KEYS")
+	list(APPEND PLAYER_FILES mmkeys_Win.c)
+else()
+	list(APPEND PLAYER_FILES mmkeys_stub.c)
+endif()
 
 add_executable(${PROJECT_NAME} ${HEADERS} ${SOURCES} ${PLAYER_HEADERS} ${PLAYER_FILES})
 target_include_directories(${PROJECT_NAME} PRIVATE ${PROJECT_SOURCE_DIR} ${INCLUDES})
