@@ -16,7 +16,7 @@ static const char* GetLastDirSeparator(const char* filePath);
 //const char* GetFileTitle(const char* filePath);
 //const char* GetFileExtension(const char* filePath);
 //void StandardizeDirSeparators(std::string& filePath);
-static bool IsAbsolutePath(const char* filePath);
+//bool IsAbsolutePath(const char* filePath);
 //std::string CombinePaths(const std::string& basePath, const std::string& addPath);
 //std::string FindFile_List(const std::vector<std::string>& fileList, const std::vector<std::string>& pathList);
 //std::string FindFile_Single(const std::string& fileName, const std::vector<std::string>& pathList);
@@ -84,7 +84,7 @@ void StandardizeDirSeparators(std::string& filePath)
 	return;
 }
 
-static bool IsAbsolutePath(const char* filePath)
+bool IsAbsolutePath(const char* filePath)
 {
 	if (filePath[0] == '\0')
 		return false;	// empty string

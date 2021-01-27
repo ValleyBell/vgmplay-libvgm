@@ -62,7 +62,20 @@ set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_C_FLAGS_RELEASE}")
 endif(CMAKE_COMPILER_IS_GNUCC)
 
 
-set(MEDIA_CONTROLS "OFF" CACHE STRING "enable Media Controls")
+if(WIN32)
+	set(MC_DEFAULT "WIN_KEYS")
+elseif(UNIX AND NOT APPLE)
+	# Note: Finding DBus1 via find_package requires dbus-1.11.12 or higher.
+	find_package(DBus1 QUIET)
+	if (DBus1_FOUND)
+		set(MC_DEFAULT "DBUS")
+	else()
+		set(MC_DEFAULT "OFF")
+	endif()
+else()
+	set(MC_DEFAULT "OFF")
+endif()
+set(MEDIA_CONTROLS "${MC_DEFAULT}" CACHE STRING "enable Media Controls")
 set_property(CACHE MEDIA_CONTROLS PROPERTY STRINGS "OFF;WIN_KEYS;WIN_OVERLAY;DBUS")
 
 
@@ -110,17 +123,24 @@ set(PLAYER_FILES
 	playctrl.cpp
 	playcfg.cpp
 )
+set(PLAYER_LIBS)
 
 # media control
-list(APPEND PLAYER_HEADERS mmkeys.h)
-if (MEDIA_CONTROLS STREQUAL "WIN_KEYS")
-	list(APPEND PLAYER_FILES mmkeys_Win.c)
+list(APPEND PLAYER_HEADERS mmkeys.h dbus.hpp)
+if(MEDIA_CONTROLS STREQUAL "WIN_KEYS")
+	list(APPEND PLAYER_FILES mmkeys_Win.c dbus_stub.cpp)
+elseif(MEDIA_CONTROLS STREQUAL "DBUS")
+	if (NOT DBus1_FOUND)	# don't import again if already found - the module doesn't like this
+		find_package(DBus1 REQUIRED)
+	endif()
+	list(APPEND PLAYER_FILES dbus.cpp)
+	list(APPEND PLAYER_LIBS dbus-1)
 else()
-	list(APPEND PLAYER_FILES mmkeys_stub.c)
+	list(APPEND PLAYER_FILES mmkeys_stub.c dbus_stub.cpp)
 endif()
 
 add_executable(${PROJECT_NAME} ${HEADERS} ${SOURCES} ${PLAYER_HEADERS} ${PLAYER_FILES})
 target_include_directories(${PROJECT_NAME} PRIVATE ${PROJECT_SOURCE_DIR} ${INCLUDES})
-target_link_libraries(${PROJECT_NAME} PRIVATE ${LIBRARIES} libvgm::vgm-utils libvgm::vgm-audio libvgm::vgm-emu libvgm::vgm-player)
+target_link_libraries(${PROJECT_NAME} PRIVATE ${LIBRARIES} libvgm::vgm-utils libvgm::vgm-audio libvgm::vgm-emu libvgm::vgm-player ${PLAYER_LIBS})
 install(TARGETS ${PROJECT_NAME} RUNTIME DESTINATION "bin")
 #add_sanitizers(${PROJECT_NAME})

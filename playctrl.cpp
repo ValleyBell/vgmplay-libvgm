@@ -44,6 +44,7 @@ extern "C" int __cdecl _kbhit(void);
 #include "playcfg.hpp"
 #include "version.h"
 #include "mmkeys.h"
+#include "dbus.hpp"
 
 
 struct AudioDriver
@@ -202,6 +203,7 @@ UINT8 PlayerMain(UINT8 showFileName)
 	
 	MultimediaKeyHook_Init();
 	MultimediaKeyHook_SetCallback(&MMKey_Event);
+	DBus_Init(playState, curSong, myPlayer, songTags);
 	
 #ifndef _WIN32
 	changemode(1);
@@ -270,11 +272,13 @@ UINT8 PlayerMain(UINT8 showFileName)
 		retVal = StartDiskWriter(sfl.fileName);
 		if (retVal)
 			fprintf(stderr, "Warning: File writer failed with error 0x%02X\n", retVal);
+		DBus_EmitSignal(SIGNAL_SEEK | SIGNAL_METADATA | SIGNAL_PLAYSTATUS | SIGNAL_CONTROLS);
 		PlayFile();
 		StopDiskWriter();
 		
 		playState &= ~PLAYSTATE_PLAY;
 		myPlayer.Stop();
+		DBus_EmitSignal(SIGNAL_PLAYSTATUS | SIGNAL_CONTROLS);
 		
 		myPlayer.UnloadFile();
 		DataLoader_Deinit(dLoad);
@@ -329,7 +333,7 @@ static void MMKey_Event(UINT8 event)
 static DATA_LOADER* GetFileLoaderUTF8(const std::string& fileNameU8)
 {
 #ifndef _WIN32
-	return FileLoader_Init(fileNameUTF8.c_str());
+	return FileLoader_Init(fileNameU8.c_str());
 #else
 #if HAVE_FILELOADER_W
 	size_t fileNameWLen = 0;
@@ -603,7 +607,7 @@ static void ShowSongInfo(void)
 	{
 		const PLR_DEV_INFO& pdi = diList[curDev];
 		const char* chipName;
-		unsigned int devCnt = 1;
+		unsigned int devCnt;
 		
 		chipName = SndEmu_GetDevName(pdi.type, 0x01, pdi.devCfg);
 		for (devCnt = 1; curDev + 1 < diList.size(); curDev ++, devCnt ++)
@@ -736,6 +740,7 @@ static UINT8 PlayFile(void)
 			Sleep(50);
 		}
 		
+		DBus_ReadWriteDispatch();
 		retVal = HandleMediaKeyPress();
 		if (! retVal)
 			retVal = HandleKeyPress(false);
@@ -927,6 +932,7 @@ static UINT8 HandleKeyPress(bool waitForKey)
 			else
 				AudioDrv_Resume(adOut.data);
 		}
+		DBus_EmitSignal(SIGNAL_PLAYSTATUS); // Emit status change signal
 		break;
 	case 'F':	// fade out
 		if (! (playState & PLAYSTATE_PLAY))
@@ -943,6 +949,7 @@ static UINT8 HandleKeyPress(bool waitForKey)
 		OSMutex_Lock(renderMtx);
 		myPlayer.Reset();
 		OSMutex_Unlock(renderMtx);
+		DBus_EmitSignal(SIGNAL_SEEK);
 		break;
 	case KEY_LEFT:
 	case KEY_RIGHT:
@@ -967,6 +974,7 @@ static UINT8 HandleKeyPress(bool waitForKey)
 				destPos += seekSmpls;
 			myPlayer.Seek(PLAYPOS_SAMPLE, destPos);
 			OSMutex_Unlock(renderMtx);
+			DBus_EmitSignal(SIGNAL_SEEK);
 		}
 		break;
 	case 'B':	// previous file (back)
@@ -999,6 +1007,7 @@ static UINT8 HandleKeyPress(bool waitForKey)
 			destPos = maxPos * pbPos10 / 10;
 			myPlayer.Seek(PLAYPOS_TICK, destPos);
 			OSMutex_Unlock(renderMtx);
+			DBus_EmitSignal(SIGNAL_SEEK);
 		}
 		break;
 	}
@@ -1030,6 +1039,7 @@ static UINT8 HandleMediaKeyPress(void)
 			else
 				AudioDrv_Resume(adOut.data);
 		}
+		DBus_EmitSignal(SIGNAL_PLAYSTATUS); // Emit status change signal
 		break;
 	case MMKEY_PREV:	// previous file (back)
 		if (curSong <= 0)
@@ -1046,6 +1056,29 @@ static UINT8 HandleMediaKeyPress(void)
 	}
 	
 	return 0x01;
+}
+
+void ExternalVGMSeek(bool relative, INT32 seekSmpls)	// for external use
+{
+	if (! (playState & PLAYSTATE_PLAY))
+		return;
+	
+	OSMutex_Lock(renderMtx);
+	if (relative)
+	{
+		UINT32 destPos = myPlayer.GetCurPos(PLAYPOS_SAMPLE);
+		if (seekSmpls < 0 && (UINT32)-seekSmpls > destPos)
+			destPos = 0;
+		else
+			destPos += seekSmpls;
+		myPlayer.Seek(PLAYPOS_SAMPLE, destPos);
+	}
+	else
+	{
+		myPlayer.Seek(PLAYPOS_SAMPLE, (UINT32)seekSmpls);
+	}
+	OSMutex_Unlock(renderMtx);
+	return;
 }
 
 static inline std::string FCC2Str(UINT32 fcc)
