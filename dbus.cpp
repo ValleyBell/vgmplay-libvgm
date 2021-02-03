@@ -30,13 +30,7 @@ They weren't lying when they said that using libdbus directly signs you up for s
 
 #include <stdtype.h>
 #include <player/playera.hpp>
-#include <player/s98player.hpp>
-#include <player/droplayer.hpp>
-#include <player/vgmplayer.hpp>
-#include <emu/SoundDevs.h>
-#include <emu/SoundEmu.h>	// for SndEmu_GetDevName()
 #include "utils.hpp"
-#include "m3uargparse.hpp"	// for SongFileList/PlaylistFileList
 #include "mmkeys.h"
 #include "dbus.hpp"
 
@@ -80,14 +74,7 @@ static mmkey_cbfunc evtCallback = NULL;
 
 static DBusConnection* connection = NULL;
 
-// main player references
-extern std::vector<SongFileList> songList;
-extern std::vector<PlaylistFileList> plList;
-
-static volatile UINT8* playState;
-static size_t* curSong;
-static PlayerA* myPlayer;
-static const std::map<std::string, std::string>* songTags;
+static MediaInfo* mInf;
 
 // Misc Helper Functions
 static inline void invalidateArtCache()
@@ -222,13 +209,13 @@ static void DBusReplyWithVariant(DBusMessageIter* args, int type, const char* ty
 
 void DBusAppendCanGoNext(DBusMessageIter* args)
 {
-	dbus_bool_t response = (*curSong + 1 < songList.size()) ? TRUE : FALSE;
+	dbus_bool_t response = (mInf->_pbSongID + 1 < mInf->_pbSongCnt) ? TRUE : FALSE;
 	DBusReplyWithVariant(args, DBUS_TYPE_BOOLEAN, DBUS_TYPE_BOOLEAN_AS_STRING, &response);
 }
 
 void DBusAppendCanGoPrevious(DBusMessageIter* args)
 {
-	dbus_bool_t response = (*curSong > 0) ? TRUE : FALSE;
+	dbus_bool_t response = (mInf->_pbSongID > 0) ? TRUE : FALSE;
 	DBusReplyWithVariant(args, DBUS_TYPE_BOOLEAN, DBUS_TYPE_BOOLEAN_AS_STRING, &response);
 }
 
@@ -285,14 +272,13 @@ static void DBusSendMetadataArray(DBusMessageIter* dict_root, DBusMetadata meta[
 
 static std::string getBasePath(const char** ls)
 {
-	const SongFileList& sfl = songList[*curSong];
 	std::string basepath;
 	std::string fullPath;
 
 	// Get the base path
 	// If the filename is absolute, then the base path is everything up to the last dir separator
 	// If relative, base path is cwd + everything before the last separator in the filename
-	if(!IsAbsolutePath(sfl.fileName.c_str()))
+	if(!IsAbsolutePath(mInf->_songPath.c_str()))
 	{
 		// Add cwd to the base path if needed
 		// -1 so that there's enough room to append the trailing /
@@ -304,7 +290,7 @@ static std::string getBasePath(const char** ls)
 			return std::string();
 		}
 		basepath.resize(strlen(basepath.c_str()));
-		fullPath = CombinePaths(basepath, sfl.fileName);
+		fullPath = CombinePaths(basepath, mInf->_songPath);
 
 #ifdef DBUS_DEBUG
 		puts("Relative path detected");
@@ -312,7 +298,7 @@ static std::string getBasePath(const char** ls)
 	}
 	else
 	{
-		fullPath = sfl.fileName;
+		fullPath = mInf->_songPath;
 	}
 	
 	const char* filePath = fullPath.c_str();
@@ -324,7 +310,7 @@ static std::string getBasePath(const char** ls)
 
 	if (ls != NULL)
 	{
-		filePath = sfl.fileName.c_str();
+		filePath = mInf->_songPath.c_str();
 		fileTitle = GetFileTitle(filePath);
 		*ls = (fileTitle == filePath) ? NULL : (fileTitle - 1);
 	}
@@ -333,7 +319,6 @@ static std::string getBasePath(const char** ls)
 
 static inline void getArtPath(const char* utf8album, std::string& basepath)
 {
-	const SongFileList& sfl = songList[*curSong];
 	basepath = getBasePath(NULL);
 
 	// Store a pointer to the end of the base path so that we can easily append to it, as well as the length of the base path
@@ -344,12 +329,11 @@ static inline void getArtPath(const char* utf8album, std::string& basepath)
 
 	// Now that we have the base path, we start looking for art
 	// If we are reading a playlist, append everything after the separator to the path and replace its m3u extension with png
-	if(sfl.playlistID != (size_t)-1)
+	if(mInf->_playlistTrkID != (size_t)-1)
 	{
 		// Copy the whole string after the separator (if one exists), excluding the file extension
 		// Otherwise take the filename as-is
-		const PlaylistFileList& pfl = plList[sfl.playlistID];
-		const char* filetitle = GetFileTitle(pfl.fileName.c_str());
+		const char* filetitle = GetFileTitle(mInf->_playlistPath.c_str());
 		const char* fileext = GetFileExtension(filetitle);
 		if (fileext == NULL)
 			fileext = filetitle + strlen(filetitle) + 1;
@@ -398,41 +382,34 @@ static inline void getArtPath(const char* utf8album, std::string& basepath)
 	basepath.clear();
 }
 
-static const char* GetTagForDisp(const std::map<std::string, std::string>& tags, const std::string& tagName)
-{
-	std::map<std::string, std::string>::const_iterator tagIt = tags.find(tagName);
-	return (tagIt == tags.end()) ? "" : tagIt->second.c_str();
-}
-
 static void DBusSendMetadata(DBusMessageIter* dict_root)
 {
 	// Send an empty array in a variant if nothing is playing
-	if(!(*playState & PLAYSTATE_PLAY))
+	if(!(mInf->_playState & PLAYSTATE_PLAY))
 	{
 		DBusSendMetadataArray(dict_root, NULL, 0);
 		return;
 	}
 
 	// Prepare metadata
-	const SongFileList& sfl = songList[*curSong];
-	PlayerBase* player = myPlayer->GetPlayer();
+	PlayerBase* player = mInf->_player.GetPlayer();
 
 	// Album
-	const char* utf8album = GetTagForDisp(*songTags, "GAME");
+	const char* utf8album = mInf->GetSongTagForDisp("GAME");
 
 	// Title
-	const char* utf8title = GetTagForDisp(*songTags, "TITLE");
+	const char* utf8title = mInf->GetSongTagForDisp("TITLE");
 
 	// Length
-	INT64 len64 = (INT64)(myPlayer->GetTotalTime(1) * 1.0E+6);
+	INT64 len64 = (INT64)(mInf->_player.GetTotalTime(1) * 1.0E+6);
 
 	// Artist
-	const char* utf8artist = GetTagForDisp(*songTags, "ARTIST");
+	const char* utf8artist = mInf->GetSongTagForDisp("ARTIST");
 
 	// Track Number in playlist
 	int32_t tracknum = 0;
-	if(sfl.playlistID != (size_t)-1)
-		tracknum = (int32_t)(1 + sfl.playlistSongID);
+	if(mInf->_playlistTrkID != (size_t)-1)
+		tracknum = (int32_t)(1 + mInf->_playlistTrkID);
 
 	// Try to get the cover art url
 	getArtPath(utf8album, artpath);
@@ -445,40 +422,22 @@ static void DBusSendMetadata(DBusMessageIter* dict_root)
 	std::string arturlescaped = std::string("file://") + urlencode(artpath);
 
 	// Game release date
-	const char* utf8release = GetTagForDisp(*songTags, "DATE");
+	const char* utf8release = mInf->GetSongTagForDisp("DATE");
 
 	// VGM File Creator
-	const char* utf8creator = GetTagForDisp(*songTags, "ENCODED_BY");
+	const char* utf8creator = mInf->GetSongTagForDisp("ENCODED_BY");
 
 	// Notes
-	const char* utf8notes = GetTagForDisp(*songTags, "COMMENT");
+	const char* utf8notes = mInf->GetSongTagForDisp("COMMENT");
 
 	// System
-	const char* utf8system = GetTagForDisp(*songTags, "SYSTEM");
+	const char* utf8system = mInf->GetSongTagForDisp("SYSTEM");
 
 	// VGM File version
-	uint32_t version = 0;
-	if (player->GetPlayerType() == FCC_VGM)
-	{
-		VGMPlayer* vgmplay = dynamic_cast<VGMPlayer*>(player);
-		const VGM_HEADER* vgmhdr = vgmplay->GetFileHeader();
-		version = vgmhdr->fileVer;
-	}
-	else if (player->GetPlayerType() == FCC_S98)
-	{
-		S98Player* s98play = dynamic_cast<S98Player*>(player);
-		const S98_HEADER* s98hdr = s98play->GetFileHeader();
-		version = s98hdr->fileVer << 8;
-	}
-	else if (player->GetPlayerType() == FCC_DRO)
-	{
-		DROPlayer* droplay = dynamic_cast<DROPlayer*>(player);
-		const DRO_HEADER* drohdr = droplay->GetFileHeader();
-		version = (drohdr->verMajor << 8) | (drohdr->verMinor << 0);
-	}
+	uint32_t version = mInf->_fileVerNum;
 
 	// Loop point
-	INT64 loop = (INT64)(myPlayer->GetLoopTime() * 1.0E+6);
+	INT64 loop = (INT64)(mInf->_player.GetLoopTime() * 1.0E+6);
 
 	if(utf8artist[0] == '\0')
 		utf8artist = utf8album;
@@ -497,24 +456,19 @@ static void DBusSendMetadata(DBusMessageIter* dict_root)
 		{ "", DBUS_TYPE_STRING_AS_STRING, &genre, DBUS_TYPE_STRING, 0 },
 	};
 
-	std::vector<PLR_DEV_INFO> diList;
-	player->GetSongDeviceInfo(diList);
 	std::vector<DBusMetadata> chips;
 	std::vector<const char*> chipPtrs;
 	// Generate chips array
-	for (size_t curDev = 0; curDev < diList.size(); curDev ++)
+	for (size_t curDev = 0; curDev < mInf->_chipList.size(); curDev ++)
 	{
-		const PLR_DEV_INFO& pdi = diList[curDev];
-		const char* chipName = SndEmu_GetDevName(pdi.type, 0x01, pdi.devCfg);
-		if (pdi.type == DEVID_SN76496)
-		{
-			if (pdi.devCfg->flags)
-				curDev ++;	// the T6W28 consists of two "half" chips in VGMs
-		}
-		chipPtrs.push_back(chipName);
+		const MediaInfo::DeviceItem& di = mInf->_chipList[curDev];
+		chipPtrs.push_back(di.name);
+	}
+	for (size_t curDev = 0; curDev < chipPtrs.size(); curDev ++)
+	{
 		DBusMetadata cm = {
 			NULL, DBUS_TYPE_STRING_AS_STRING,
-			(void*)&chipPtrs[chipPtrs.size()- 1], DBUS_TYPE_STRING,
+			(void*)&chipPtrs[curDev], DBUS_TYPE_STRING,
 			0
 		};
 		chips.push_back(cm);
@@ -528,7 +482,7 @@ static void DBusSendMetadata(DBusMessageIter* dict_root)
 	if(lastsep && *lastsep != '\0')
 		lastsep++;
 	else
-		lastsep = sfl.fileName.c_str();
+		lastsep = mInf->_songPath.c_str();
 	pathurl += lastsep;
 	std::string url = std::string("file://") + urlencode(pathurl);
 
@@ -571,9 +525,9 @@ static void DBusSendPlaybackStatus(DBusMessageIter* args)
 {
 	const char* response;
 
-	if(!(*playState & PLAYSTATE_PLAY))
+	if(!(mInf->_playState & PLAYSTATE_PLAY))
 		response = "Stopped";
-	else if(*playState & PLAYSTATE_PAUSE)
+	else if(mInf->_playState & PLAYSTATE_PAUSE)
 		response = "Paused";
 	else
 		response = "Playing";
@@ -602,7 +556,7 @@ void DBus_EmitSignal(UINT8 type)
 		msg = dbus_message_new_signal(DBUS_MPRIS_PATH, DBUS_MPRIS_PLAYER, "Seeked");
 
 		dbus_message_iter_init_append(msg, &args);
-		INT64 response = (INT64)(myPlayer->GetCurTime(1) * 1.0E+6);
+		INT64 response = (INT64)(mInf->_player.GetCurTime(1) * 1.0E+6);
 		dbus_message_iter_append_basic(&args, DBUS_TYPE_INT64, &response);
 
 		dbus_connection_send(connection, msg, NULL);
@@ -664,7 +618,7 @@ void DBus_EmitSignal(UINT8 type)
 			dbus_message_iter_open_container(&dict, DBUS_TYPE_DICT_ENTRY, NULL, &dict_entry);
 				const char* playing = "Position";
 				dbus_message_iter_append_basic(&dict_entry, DBUS_TYPE_STRING, &playing);
-				INT64 response = (INT64)(myPlayer->GetCurTime(1) * 1.0E+6);
+				INT64 response = (INT64)(mInf->_player.GetCurTime(1) * 1.0E+6);
 				DBusReplyWithVariant(&dict_entry, DBUS_TYPE_INT64, DBUS_TYPE_INT64_AS_STRING, &response);
 			dbus_message_iter_close_container(&dict, &dict_entry);
 		}
@@ -843,7 +797,7 @@ static DBusHandlerResult DBusHandler(DBusConnection* connection, DBusMessage* me
 			}
 			else if(!strcmp(method_property_arg, "Position"))
 			{
-				INT64 response = (INT64)(myPlayer->GetCurTime(1) * 1.0E+6);
+				INT64 response = (INT64)(mInf->_player.GetCurTime(1) * 1.0E+6);
 				DBusReplyWithVariant(&args, DBUS_TYPE_INT64, DBUS_TYPE_INT64_AS_STRING, &response);
 			}
 			//Dummy volume
@@ -851,7 +805,6 @@ static DBusHandlerResult DBusHandler(DBusConnection* connection, DBusMessage* me
 			{
 				double response = 1.0;
 				DBusReplyWithVariant(&args, DBUS_TYPE_DOUBLE, DBUS_TYPE_DOUBLE_AS_STRING, &response);
-
 			}
 			else if(!strcmp(method_property_arg, "CanControl"))
 			{
@@ -1052,7 +1005,7 @@ static DBusHandlerResult DBusHandler(DBusConnection* connection, DBusMessage* me
 					// Field Title
 					title = "Position";
 					dbus_message_iter_append_basic(&dict_entry, DBUS_TYPE_STRING, &title);
-					INT64 position = (INT64)(myPlayer->GetCurTime(1) * 1.0E+6);
+					INT64 position = (INT64)(mInf->_player.GetCurTime(1) * 1.0E+6);
 					DBusReplyWithVariant(&dict_entry, DBUS_TYPE_INT64, DBUS_TYPE_INT64_AS_STRING, &position);
 				dbus_message_iter_close_container(&dict, &dict_entry);
 
@@ -1090,7 +1043,7 @@ static DBusHandlerResult DBusHandler(DBusConnection* connection, DBusMessage* me
 #ifdef DBUS_DEBUG
 		printf("Seek called with %lld\n", (long long)offset);
 #endif
-		INT32 TargetSeekPos = ReturnSamplePos(offset, *myPlayer);
+		INT32 TargetSeekPos = ReturnSamplePos(offset, mInf->_player);
 		ExternalVGMSeek(true, TargetSeekPos);
 
 		DBusEmptyMethodResponse(connection, message);
@@ -1136,7 +1089,7 @@ static DBusHandlerResult DBusHandler(DBusConnection* connection, DBusMessage* me
 		if(!dbus_message_get_args(message, NULL, DBUS_TYPE_OBJECT_PATH, &path, DBUS_TYPE_INT64, &pos, DBUS_TYPE_INVALID))
 			return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
 
-		INT32 seek_pos = ReturnSamplePos(pos, *myPlayer);
+		INT32 seek_pos = ReturnSamplePos(pos, mInf->_player);
 		ExternalVGMSeek(false, seek_pos);
 
 		DBusEmptyMethodResponse(connection, message);
@@ -1203,12 +1156,12 @@ void DBus_ReadWriteDispatch(void)
 	if(connection == NULL)
 		return;
 
-	if (myPlayer != NULL)
+	if (mInf->_player.GetPlayer() != NULL)
 	{
 		// Detect loops and send the seeked signal when appropriate
-		if(OldLoopCount != myPlayer->GetCurLoop())
+		if(OldLoopCount != mInf->_player.GetCurLoop())
 		{
-			OldLoopCount = myPlayer->GetCurLoop();
+			OldLoopCount = mInf->_player.GetCurLoop();
 			DBus_EmitSignal(SIGNAL_SEEK);
 		}
 		// TODO: instead of constantly polling the loop value, we should just process the PLREVT_LOOP event
@@ -1219,10 +1172,8 @@ void DBus_ReadWriteDispatch(void)
 	dbus_connection_read_write_dispatch(connection, 1);
 }
 
-void DBus_Init(volatile UINT8& mainPlayState, size_t& songID, PlayerA& mainPlayer, const std::map<std::string, std::string>& tagMemory)
+void DBus_Init(MediaInfo& mediaInfo)
 {
-	playState = &mainPlayState;
-	curSong = &songID;
-	myPlayer = &mainPlayer;
-	songTags = &tagMemory;
+	mInf = &mediaInfo;
+	return;
 }

@@ -82,3 +82,7 @@ void MultimediaKeyHook_SetCallback(mmkey_cbfunc callbackFunc)
 	
 	return;
 }
+
+// TODO: use advanced features supported by Windows SystemMediaTransportControls Class
+// https://docs.microsoft.com/en-us/uwp/api/windows.media.systemmediatransportcontrols
+// example: https://searchfox.org/mozilla-central/source/widget/windows/WindowsSMTCProvider.cpp

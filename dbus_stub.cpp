@@ -1,4 +1,5 @@
 #include <stdtype.h>
+#include "dbus.hpp"
 
 void DBus_ReadWriteDispatch(void)
 {
@@ -10,7 +11,7 @@ void DBus_EmitSignal(UINT8 type)
 	return;
 }
 
-void DBus_Init(volatile UINT8& mainPlayState, size_t& songID, PlayerA& mainPlayer, const std::map<std::string, std::string>& tagMemory)
+void DBus_Init(MediaInfo& mediaInfo)
 {
 	return;
 }

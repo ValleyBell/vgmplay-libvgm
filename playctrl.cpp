@@ -33,8 +33,6 @@ extern "C" int __cdecl _kbhit(void);
 #include <player/playera.hpp>
 #include <audio/AudioStream.h>
 #include <audio/AudioStream_SpcDrvFuns.h>
-#include <emu/SoundDevs.h>
-#include <emu/SoundEmu.h>	// for SndEmu_GetDevName()
 #include <utils/OSMutex.h>
 #include <utils/StrUtils.h>
 
@@ -42,6 +40,7 @@ extern "C" int __cdecl _kbhit(void);
 #include "config.hpp"
 #include "m3uargparse.hpp"
 #include "playcfg.hpp"
+#include "mediainfo.hpp"
 #include "version.h"
 #include "mmkeys.h"
 #include "dbus.hpp"
@@ -64,17 +63,12 @@ static void MMKey_Event(UINT8 event);
 static DATA_LOADER* GetFileLoaderUTF8(const std::string& fileName);
 static UINT8 OpenFile(const std::string& fileName, DATA_LOADER*& dLoad, PlayerBase*& player);
 static void PreparePlayback(void);
-static void Tags_LangFilter(std::map<std::string, std::string>& tags, const std::string& tagName,
-	const std::vector<std::string>& langPostfixes, int defaultLang);
-static const char* GetTagForDisp(const std::map<std::string, std::string>& tags, const std::string& tagName);
-static void EnumerateTags(void);
 static void ShowSongInfo(void);
 static void ShowConsoleTitle(const std::string& fileName, const std::string& titleTag, const std::string& gameTag);
 static UINT8 PlayFile(void);
 static int GetPressedKey(void);
 static UINT8 HandleKeyPress(bool waitForKey);
 static UINT8 HandleMediaKeyPress(void);
-static inline std::string FCC2Str(UINT32 fcc);
 static INT8 GetTimeDispMode(double seconds);
 static std::string GetTimeStr(double seconds, INT8 showHours = 0);
 static UINT32 FillBuffer(void* drvStruct, void* userParam, UINT32 bufSize, void* Data);
@@ -125,12 +119,8 @@ static CPCONV* cpcU8_ACP;
 
 static bool manualRenderLoop = false;
 static bool dummyRenderAtLoad = false;
-static volatile UINT8 playState;
 
 static INT8 timeDispMode = 0;
-static bool isRawLog;
-static UINT32 fileStartPos;
-static UINT32 fileEndPos;
 
 extern std::vector<std::string> appSearchPaths;
 extern Configuration playerCfg;
@@ -141,10 +131,7 @@ static int controlVal;
 static size_t curSong;
 static UINT8 lastMMEvent = 0x00;
 
-static GeneralOptions genOpts;
-static ChipOptions chipOpts[0x100];
-static PlayerA myPlayer;
-static std::map<std::string, std::string> songTags;
+static MediaInfo mediaInfo;
 
 INLINE UINT32 MSec2Samples(UINT32 val, const PlayerA& player)
 {
@@ -153,6 +140,8 @@ INLINE UINT32 MSec2Samples(UINT32 val, const PlayerA& player)
 
 UINT8 PlayerMain(UINT8 showFileName)
 {
+	PlayerA& myPlayer = mediaInfo._player;
+	GeneralOptions& genOpts = mediaInfo._genOpts;
 	UINT8 retVal;
 	UINT8 fnShowMode;
 	
@@ -161,7 +150,7 @@ UINT8 PlayerMain(UINT8 showFileName)
 	else
 		fnShowMode = 0;
 	
-	ParseConfiguration(genOpts, 0x100, chipOpts, playerCfg);
+	ParseConfiguration(genOpts, 0x100, mediaInfo._chipOpts, playerCfg);
 	
 	retVal = InitAudioSystem();
 	if (retVal)
@@ -172,7 +161,7 @@ UINT8 PlayerMain(UINT8 showFileName)
 		DeinitAudioSystem();
 		return 1;
 	}
-	playState = 0x00;
+	mediaInfo._playState = 0x00;
 	
 #ifdef _WIN32
 	retVal = CPConv_Init(&cpcU8_Wide, "UTF-8", "UTF-16LE");
@@ -195,15 +184,16 @@ UINT8 PlayerMain(UINT8 showFileName)
 	ApplyCfg_General(myPlayer, genOpts);
 	for (size_t curChp = 0; curChp < 0x100; curChp ++)
 	{
-		const ChipOptions& cOpt = chipOpts[curChp];
+		const ChipOptions& cOpt = mediaInfo._chipOpts[curChp];
 		if (cOpt.chipType == 0xFF)
 			continue;
 		ApplyCfg_Chip(myPlayer, genOpts, cOpt);
 	}
+	mediaInfo._pbSongCnt = songList.size();
 	
 	MultimediaKeyHook_Init();
 	MultimediaKeyHook_SetCallback(&MMKey_Event);
-	DBus_Init(playState, curSong, myPlayer, songTags);
+	DBus_Init(mediaInfo);
 	
 #ifndef _WIN32
 	changemode(1);
@@ -216,28 +206,42 @@ UINT8 PlayerMain(UINT8 showFileName)
 		DATA_LOADER* dLoad;
 		PlayerBase* player;
 		
+		mediaInfo._pbSongID = curSong;
+		mediaInfo._songPath = sfl.fileName;
+		mediaInfo._playlistTrkID = sfl.playlistSongID;
+		if (sfl.playlistSongID == (size_t)-1)
+		{
+			mediaInfo._playlistPath.clear();
+			mediaInfo._playlistTrkCnt = 0;
+		}
+		else
+		{
+			const PlaylistFileList& pfl = plList[sfl.playlistID];
+			mediaInfo._playlistPath = pfl.fileName;
+			mediaInfo._playlistTrkCnt = pfl.songCount;
+		}
+		
 		if (fnShowMode == 1)
 		{
-			u8printf("File Name:      %s\n", sfl.fileName.c_str());
+			u8printf("File Name:      %s\n", mediaInfo._songPath.c_str());
 		}
 		else if (fnShowMode == 0)
 		{
 			cls();
 			printf(APP_NAME);
 			printf("\n----------\n");
-			if (sfl.playlistID == (size_t)-1)
+			if (mediaInfo._playlistTrkID == (size_t)-1)
 			{
 				printf("\n");
 			}
 			else
 			{
-				const PlaylistFileList& pfl = plList[sfl.playlistID];
-				u8printf("Playlist File:  %s\n", pfl.fileName.c_str());
-				//printf("Playlist File:  %s [song %u/%u]\n", pfl.fileName.c_str(),
-				//	1 + (unsigned)sfl.playlistSongID, (unsigned)pfl.songCount);
+				u8printf("Playlist File:  %s\n", mediaInfo._playlistPath.c_str());
+				//printf("Playlist File:  %s [song %u/%u]\n", mediaInfo._playlistPath.c_str(),
+				//	1 + (unsigned)mediaInfo._playlistTrkID, (unsigned)mediaInfo._playlistTrkCnt);
 			}
-			u8printf("File Name:      [%*u/%u] %s\n", count_digits((int)songList.size()), 1 + (unsigned)curSong,
-				(unsigned)songList.size(), sfl.fileName.c_str());
+			u8printf("File Name:      [%*u/%u] %s\n", count_digits((int)mediaInfo._pbSongCnt), 1 + (unsigned)mediaInfo._pbSongID,
+				(unsigned)mediaInfo._pbSongCnt, mediaInfo._songPath.c_str());
 		}
 		fflush(stdout);
 		
@@ -254,19 +258,20 @@ UINT8 PlayerMain(UINT8 showFileName)
 		}
 		printf("\n");
 		
-		fileEndPos = myPlayer.GetFileSize();
-		EnumerateTags();	// must be done before PreparePlayback(), as it may parse some of the tags
+		mediaInfo._fileEndPos = myPlayer.GetFileSize();
+		mediaInfo.PreparePlayback();
 		PreparePlayback();
 		
 		// call "start" before showing song info, so that we can get the sound cores
 		myPlayer.Start();
-		playState |= PLAYSTATE_PLAY;	// tell the key handler to enable playback controls
+		mediaInfo._playState |= PLAYSTATE_PLAY;	// tell the key handler to enable playback controls
 		
+		mediaInfo.EnumerateChips();
 		myPlayer.Render(0, NULL);	// process first sample
-		fileStartPos = myPlayer.GetCurPos(PLAYPOS_FILEOFS);	// get position after processing initialization block
+		mediaInfo._fileStartPos = myPlayer.GetCurPos(PLAYPOS_FILEOFS);	// get position after processing initialization block
 		timeDispMode = GetTimeDispMode(myPlayer.GetTotalTime(0));
 		if (genOpts.setTermTitle)
-			ShowConsoleTitle(sfl.fileName, GetTagForDisp(songTags, "TITLE"), GetTagForDisp(songTags, "GAME"));
+			ShowConsoleTitle(mediaInfo._songPath, mediaInfo.GetSongTagForDisp("TITLE"), mediaInfo.GetSongTagForDisp("GAME"));
 		ShowSongInfo();
 		
 		retVal = StartDiskWriter(sfl.fileName);
@@ -276,7 +281,7 @@ UINT8 PlayerMain(UINT8 showFileName)
 		PlayFile();
 		StopDiskWriter();
 		
-		playState &= ~PLAYSTATE_PLAY;
+		mediaInfo._playState &= ~PLAYSTATE_PLAY;
 		myPlayer.Stop();
 		DBus_EmitSignal(SIGNAL_PLAYSTATUS | SIGNAL_CONTROLS);
 		
@@ -313,12 +318,12 @@ static bool AdvanceSongList(size_t& songIdx, int controlVal)
 	
 	if (controlVal > 0)
 	{
-		curSong ++;
+		songIdx ++;
 	}
 	else if (controlVal < 0)
 	{
-		if (curSong > 0)
-			curSong --;
+		if (songIdx > 0)
+			songIdx --;
 	}
 	return true;
 }
@@ -375,7 +380,7 @@ static UINT8 OpenFile(const std::string& fileName, DATA_LOADER*& dLoad, PlayerBa
 		fprintf(stderr, "Error 0x%02X opening file!\n", retVal);
 		return 0xFF;
 	}
-	retVal = myPlayer.LoadFile(dLoad);
+	retVal = mediaInfo._player.LoadFile(dLoad);
 	if (retVal)
 	{
 		DataLoader_CancelLoading(dLoad);
@@ -388,188 +393,45 @@ static UINT8 OpenFile(const std::string& fileName, DATA_LOADER*& dLoad, PlayerBa
 
 static void PreparePlayback(void)
 {
-	PlayerBase* player = myPlayer.GetPlayer();
+	PlayerA& myPlayer = mediaInfo._player;
+	const GeneralOptions& genOpts = mediaInfo._genOpts;
 	UINT32 timeMS;
-	double volGain = 1.0;
 	
-	isRawLog = false;
-	if (player->GetPlayerType() == FCC_VGM)
-	{
-		VGMPlayer* vgmplay = dynamic_cast<VGMPlayer*>(player);
-		const VGM_HEADER* vgmhdr = vgmplay->GetFileHeader();
-		
-		fileEndPos = vgmhdr->dataEnd;
-		fileStartPos = vgmhdr->dataOfs;
-		volGain = pow(2.0, vgmhdr->volumeGain / (double)0x100);
-		
-		// RAW Log: no loop, no/empty Creator tag, no Title tag
-		if (! vgmhdr->loopOfs && songTags.find("ENCODED_BY") == songTags.end() &&
-			songTags.find("TITLE") == songTags.end())
-			isRawLog = true;
-		if (vgmhdr->numTicks == 0)
-			isRawLog = false;
-	}
-	else if (player->GetPlayerType() == FCC_S98)
-	{
-		S98Player* s98play = dynamic_cast<S98Player*>(player);
-		const S98_HEADER* s98hdr = s98play->GetFileHeader();
-		
-		fileStartPos = s98hdr->dataOfs;
-		if (s98hdr->tagOfs > s98hdr->dataOfs)
-			fileEndPos = s98hdr->tagOfs;
-		
-		if (! s98hdr->loopOfs && songTags.find("TITLE") == songTags.end())
-			isRawLog = true;
-	}
-	else if (player->GetPlayerType() == FCC_DRO)
-	{
-		DROPlayer* droplay = dynamic_cast<DROPlayer*>(player);
-		const DRO_HEADER* drohdr = droplay->GetFileHeader();
-		
-		fileStartPos = drohdr->dataOfs;
-		
-		isRawLog = true;
-	}
-	
-	INT32 volume = (INT32)(0x10000 * volGain * genOpts.volume + 0.5);
+	INT32 volume = (INT32)(0x10000 * mediaInfo._volGain * genOpts.volume + 0.5);
 	myPlayer.SetMasterVolume(volume);
 	
 	// last song: fadeTime_single, others: fadeTime_plist
 	timeMS = (curSong + 1 == songList.size()) ? genOpts.fadeTime_single : genOpts.fadeTime_plist;
 	myPlayer.SetFadeSamples(MSec2Samples(timeMS, myPlayer));
 	
-	timeMS = (player->GetLoopTicks() == 0) ? genOpts.pauseTime_jingle : genOpts.pauseTime_loop;
+	timeMS = (myPlayer.GetPlayer()->GetLoopTicks() == 0) ? genOpts.pauseTime_jingle : genOpts.pauseTime_loop;
 	myPlayer.SetEndSilenceSamples(MSec2Samples(timeMS, myPlayer));
-	
-	return;
-}
-
-static void Tags_LangFilter(std::map<std::string, std::string>& tags, const std::string& tagName,
-	const std::vector<std::string>& langPostfixes, int defaultLang)
-{
-	// 1. search for matching lang-tag
-	// 2. save that
-	// 3. remove all others
-	std::vector<std::string> langTags;
-	std::vector<std::string>::const_iterator lpfIt;
-	std::vector<std::string>::const_iterator ltIt;
-	std::map<std::string, std::string>::iterator chosenTagIt;
-	
-	for (lpfIt = langPostfixes.begin(); lpfIt != langPostfixes.end(); ++lpfIt)
-		langTags.push_back(tagName + *lpfIt);
-	
-	chosenTagIt = tags.end();
-	if (defaultLang >= 0 && (size_t)defaultLang < langTags.size())
-		chosenTagIt = tags.find(langTags[defaultLang]);
-	if (chosenTagIt == tags.end())
-	{
-		for (ltIt = langTags.begin(); ltIt != langTags.end(); ++ltIt)
-		{
-			chosenTagIt = tags.find(*ltIt);
-			if (chosenTagIt != tags.end())
-				break;
-		}
-	}
-	if (chosenTagIt == tags.end())
-		return;
-	
-	if (chosenTagIt->first != tagName)
-		tags[tagName] = chosenTagIt->second;
-	
-	for (ltIt = langTags.begin(); ltIt != langTags.end(); ++ltIt)
-	{
-		if (*ltIt == tagName)
-			continue;
-		tags.erase(*ltIt);	// TODO: iterator handling
-	}
-	
-	return;
-}
-
-static const char* GetTagForDisp(const std::map<std::string, std::string>& tags, const std::string& tagName)
-{
-	std::map<std::string, std::string>::const_iterator tagIt = tags.find(tagName);
-	return (tagIt == tags.end()) ? "" : tagIt->second.c_str();
-}
-
-static void EnumerateTags(void)
-{
-	PlayerBase* player = myPlayer.GetPlayer();
-	std::vector<std::string> langPostfixes;
-	int defaultLang = genOpts.preferJapTag ? 1 : 0;
-	
-	const char* const* tagList = player->GetTags();
-	songTags.clear();
-	if (tagList == NULL)
-		return;
-	
-	for (const char* const* t = tagList; *t != NULL; t += 2)
-	{
-		if (t[1][0] == '\0')
-			continue;	// skip empty VGM tags, else the LangFilter may choose them
-		songTags[t[0]] = t[1];
-	}
-	
-	langPostfixes.push_back("");
-	langPostfixes.push_back("-JPN");
-	
-	Tags_LangFilter(songTags, "TITLE", langPostfixes, defaultLang);
-	Tags_LangFilter(songTags, "GAME", langPostfixes, defaultLang);
-	Tags_LangFilter(songTags, "SYSTEM", langPostfixes, defaultLang);
-	Tags_LangFilter(songTags, "ARTIST", langPostfixes, defaultLang);
 	
 	return;
 }
 
 static void ShowSongInfo(void)
 {
-	PlayerBase* player = myPlayer.GetPlayer();
-	PLR_SONG_INFO sInf;
-	char verStr[0x20];
-	double volGain = 1.0;
+	PlayerBase* player = mediaInfo._player.GetPlayer();
 	
-	player->GetSongInfo(sInf);
-	if (player->GetPlayerType() == FCC_VGM)
-	{
-		VGMPlayer* vgmplay = dynamic_cast<VGMPlayer*>(player);
-		const VGM_HEADER* vgmhdr = vgmplay->GetFileHeader();
-		
-		sprintf(verStr, "VGM %X.%02X", (vgmhdr->fileVer >> 8) & 0xFF, (vgmhdr->fileVer >> 0) & 0xFF);
-		volGain = pow(2.0, vgmhdr->volumeGain / (double)0x100);
-	}
-	else if (player->GetPlayerType() == FCC_S98)
-	{
-		S98Player* s98play = dynamic_cast<S98Player*>(player);
-		const S98_HEADER* s98hdr = s98play->GetFileHeader();
-		
-		sprintf(verStr, "S98 v%u", s98hdr->fileVer);
-	}
-	else if (player->GetPlayerType() == FCC_DRO)
-	{
-		DROPlayer* droplay = dynamic_cast<DROPlayer*>(player);
-		const DRO_HEADER* drohdr = droplay->GetFileHeader();
-		
-		sprintf(verStr, "DRO v%u", drohdr->verMajor);	// DRO has a "verMinor" field, but it's always 0
-	}
-	
-	u8printf("Track Title:    %s\n", GetTagForDisp(songTags, "TITLE"));
-	u8printf("Game Name:      %s\n", GetTagForDisp(songTags, "GAME"));
-	u8printf("System:         %s\n", GetTagForDisp(songTags, "SYSTEM"));
-	u8printf("Composer:       %s\n", GetTagForDisp(songTags, "ARTIST"));
+	u8printf("Track Title:    %s\n", mediaInfo.GetSongTagForDisp("TITLE"));
+	u8printf("Game Name:      %s\n", mediaInfo.GetSongTagForDisp("GAME"));
+	u8printf("System:         %s\n", mediaInfo.GetSongTagForDisp("SYSTEM"));
+	u8printf("Composer:       %s\n", mediaInfo.GetSongTagForDisp("ARTIST"));
 	if (player->GetPlayerType() == FCC_S98)
 	{
 		S98Player* s98play = dynamic_cast<S98Player*>(player);
 		const S98_HEADER* s98hdr = s98play->GetFileHeader();
 		
-		u8printf("Release:        %-11s Tick Rate: %u/%u\n", GetTagForDisp(songTags, "DATE"),
+		u8printf("Release:        %-11s Tick Rate: %u/%u\n", mediaInfo.GetSongTagForDisp("DATE"),
 			s98hdr->tickMult, s98hdr->tickDiv);
 	}
 	else
 	{
-		u8printf("Release:        %s\n", GetTagForDisp(songTags, "DATE"));
+		u8printf("Release:        %s\n", mediaInfo.GetSongTagForDisp("DATE"));
 	}
-	printf("Format:         %-11s ", verStr);
-	printf("Gain:%5.2f    ", volGain);
+	printf("Format:         %-11s ", mediaInfo._fileVerStr.c_str());
+	printf("Gain:%5.2f    ", mediaInfo._volGain);
 	if (player->GetPlayerType() == FCC_DRO)
 	{
 		DROPlayer* droplay = dynamic_cast<DROPlayer*>(player);
@@ -588,48 +450,39 @@ static void ShowSongInfo(void)
 	}
 	else
 	{
-		UINT32 loopLen = player->GetLoopTicks();
-		if (sInf.loopTick != (UINT32)-1)
-			printf("Loop: Yes (%s)\n", GetTimeStr(player->Tick2Second(loopLen), -1).c_str());
-		else if (isRawLog && genOpts.fadeRawLogs)
+		if (mediaInfo._looping)
+			printf("Loop: Yes (%s)\n", GetTimeStr(mediaInfo._player.GetLoopTime(), -1).c_str());
+		else if (mediaInfo._isRawLog && mediaInfo._genOpts.fadeRawLogs)
 			printf("Loop: No (raw)\n");
 		else
 			printf("Loop: No\n");
 	}
-	u8printf("VGM by:         %s\n", GetTagForDisp(songTags, "ENCODED_BY"));
-	u8printf("Notes:          %s\n", GetTagForDisp(songTags, "COMMENT"));
+	u8printf("VGM by:         %s\n", mediaInfo.GetSongTagForDisp("ENCODED_BY"));
+	u8printf("Notes:          %s\n", mediaInfo.GetSongTagForDisp("COMMENT"));
 	printf("\n");
 	
-	std::vector<PLR_DEV_INFO> diList;
-	player->GetSongDeviceInfo(diList);
 	printf("Used chips:     ");
-	for (size_t curDev = 0; curDev < diList.size(); curDev ++)
+	for (size_t curDev = 0; curDev < mediaInfo._chipList.size(); curDev ++)
 	{
-		const PLR_DEV_INFO& pdi = diList[curDev];
-		const char* chipName;
-		unsigned int devCnt;
+		const MediaInfo::DeviceItem& di = mediaInfo._chipList[curDev];
+		unsigned int devCnt = 1;
 		
-		chipName = SndEmu_GetDevName(pdi.type, 0x01, pdi.devCfg);
-		for (devCnt = 1; curDev + 1 < diList.size(); curDev ++, devCnt ++)
+		for (; curDev + 1 < mediaInfo._chipList.size(); curDev ++)
 		{
-			const PLR_DEV_INFO& pdi1 = diList[curDev + 1];
-			const char* chipName1 = SndEmu_GetDevName(pdi1.type, 0x01, pdi1.devCfg);
-			bool sameChip = (chipName == chipName1);	// we assume static pointers to chip names here
-			sameChip &= (! (pdi.core != pdi1.core && genOpts.showDevCore));
-			if (! sameChip)
+			const MediaInfo::DeviceItem& di1 = mediaInfo._chipList[curDev + 1];
+			if (di1.name != di.name)
 				break;
+			if (mediaInfo._genOpts.showDevCore && di1.core != di.core)
+				break;
+			devCnt ++;
 		}
-		if (pdi.type == DEVID_SN76496)
-		{
-			if (pdi.devCfg->flags && devCnt > 1)
-				devCnt /= 2;	// the T6W28 consists of two "half" chips in VGMs
-		}
+		
 		if (devCnt > 1)
 			printf("%ux", devCnt);
-		if (genOpts.showDevCore)
-			printf("%s (%s), ", chipName, FCC2Str(pdi.core).c_str());
+		if (mediaInfo._genOpts.showDevCore)
+			printf("%s (%s), ", di.name.c_str(), di.core.c_str());
 		else
-			printf("%s, ", chipName);
+			printf("%s, ", di.name.c_str());
 	}
 	printf("\b\b \n\n");
 	return;
@@ -667,28 +520,10 @@ static void ShowConsoleTitle(const std::string& fileName, const std::string& tit
 
 static UINT8 PlayFile(void)
 {
+	const GeneralOptions& genOpts = mediaInfo._genOpts;
+	PlayerA& myPlayer = mediaInfo._player;
 	UINT8 retVal;
 	bool needRefresh;
-	
-#if 0
-	{
-		PLR_SONG_INFO sInf;
-		std::vector<PLR_DEV_INFO> diList;
-		size_t curDev;
-		
-		player->GetSongInfo(sInf);
-		player->GetSongDeviceInfo(diList);
-		printf("SongInfo: %s v%X.%X, Rate %u/%u, Len %u, Loop at %d, devices: %u\n",
-			FCC2Str(sInf.format).c_str(), sInf.fileVerMaj, sInf.fileVerMin,
-			sInf.tickRateMul, sInf.tickRateDiv, sInf.songLen, sInf.loopTick, sInf.deviceCnt);
-		for (curDev = 0; curDev < diList.size(); curDev ++)
-		{
-			const PLR_DEV_INFO& pdi = diList[curDev];
-			printf(" Dev %d: Type 0x%02X #%d, Core %s, Clock %u, Rate %u, Volume 0x%X\n",
-				(int)pdi.id, pdi.type, (INT8)pdi.instance, FCC2Str(pdi.core).c_str(), pdi.devCfg->clock, pdi.smplRate, pdi.volume);
-		}
-	}
-#endif
 	
 	if (adOut.data != NULL)
 		retVal = AudioDrv_SetCallback(adOut.data, FillBuffer, &myPlayer);
@@ -696,17 +531,17 @@ static UINT8 PlayFile(void)
 		retVal = 0xFF;
 	manualRenderLoop = (retVal != AERR_OK);
 	controlVal = 0;
-	playState &= ~PLAYSTATE_END;
+	mediaInfo._playState &= ~PLAYSTATE_END;
 	needRefresh = true;
-	while(! (playState & PLAYSTATE_END))
+	while(! (mediaInfo._playState & PLAYSTATE_END))
 	{
-		if (! (playState & PLAYSTATE_PAUSE))
+		if (! (mediaInfo._playState & PLAYSTATE_PAUSE))
 			needRefresh = true;	// always update when playing
 		if (needRefresh)
 		{
 			const char* pState;
 			
-			if (playState & PLAYSTATE_PAUSE)
+			if (mediaInfo._playState & PLAYSTATE_PAUSE)
 				pState = "Paused ";
 			else if (myPlayer.GetState() & PLAYSTATE_END)
 				pState = "Finish ";
@@ -715,9 +550,9 @@ static UINT8 PlayFile(void)
 			else
 				pState = "Playing";
 			
-			UINT32 dataLen = fileEndPos - fileStartPos;
+			UINT32 dataLen = mediaInfo._fileEndPos - mediaInfo._fileStartPos;
 			UINT32 dataPos = myPlayer.GetCurPos(PLAYPOS_FILEOFS);
-			dataPos = (dataPos >= fileStartPos) ? (dataPos - fileStartPos) : 0x00;
+			dataPos = (dataPos >= mediaInfo._fileStartPos) ? (dataPos - mediaInfo._fileStartPos) : 0x00;
 			
 			printf("%s%6.2f%%  %s / %s seconds  \r", pState,
 					100.0 * dataPos / dataLen,
@@ -727,7 +562,7 @@ static UINT8 PlayFile(void)
 			needRefresh = false;
 		}
 		
-		if (manualRenderLoop && ! (playState & PLAYSTATE_PAUSE))
+		if (manualRenderLoop && ! (mediaInfo._playState & PLAYSTATE_PAUSE))
 		{
 			UINT32 wrtBytes = FillBuffer(NULL, &myPlayer, audioBuf.size(), &audioBuf[0]);
 			if (adOut.data != NULL)
@@ -751,9 +586,9 @@ static UINT8 PlayFile(void)
 				break;
 		}
 		
-		if (genOpts.fadeRawLogs && isRawLog && genOpts.fadeTime_single > 0)
+		if (genOpts.fadeRawLogs && mediaInfo._isRawLog && genOpts.fadeTime_single > 0)
 		{
-			if (! (playState & PLAYSTATE_PAUSE) && ! (myPlayer.GetState() & PLAYSTATE_FADE))
+			if (! (mediaInfo._playState & PLAYSTATE_PAUSE) && ! (myPlayer.GetState() & PLAYSTATE_FADE))
 			{
 				double fadeStart = myPlayer.GetTotalTime(1) - genOpts.fadeTime_single / 1500.0;
 				if (myPlayer.GetCurTime(1) >= fadeStart)
@@ -906,6 +741,9 @@ static UINT8 HandleKeyPress(bool waitForKey)
 	if (! waitForKey && ! _kbhit())
 		return 0;
 	
+	const GeneralOptions& genOpts = mediaInfo._genOpts;
+	PlayerA& myPlayer = mediaInfo._player;
+	
 	int keyCode = GetPressedKey();
 	if (keyCode >= 'a' && keyCode <= 'z')
 		keyCode = toupper(keyCode);
@@ -913,21 +751,21 @@ static UINT8 HandleKeyPress(bool waitForKey)
 	{
 	case 0x1B:	// ESC
 	case 'Q':	// quit
-		playState |= PLAYSTATE_END;
+		mediaInfo._playState |= PLAYSTATE_END;
 		controlVal = +9;
 		return 0x10;
 	case ' ':
 	case 'P':	// pause
-		if (! (playState & PLAYSTATE_PLAY))
+		if (! (mediaInfo._playState & PLAYSTATE_PLAY))
 			break;
-		playState ^= PLAYSTATE_PAUSE;
+		mediaInfo._playState ^= PLAYSTATE_PAUSE;
 		/*if (genOpts.soundWhilePaused)
 		{
 			// TODO
 		}
 		else*/ if (adOut.data != NULL)
 		{
-			if (playState & PLAYSTATE_PAUSE)
+			if (mediaInfo._playState & PLAYSTATE_PAUSE)
 				AudioDrv_Pause(adOut.data);
 			else
 				AudioDrv_Resume(adOut.data);
@@ -935,7 +773,7 @@ static UINT8 HandleKeyPress(bool waitForKey)
 		DBus_EmitSignal(SIGNAL_PLAYSTATUS); // Emit status change signal
 		break;
 	case 'F':	// fade out
-		if (! (playState & PLAYSTATE_PLAY))
+		if (! (mediaInfo._playState & PLAYSTATE_PLAY))
 			break;
 		// enforce "non-playlist" fade-out
 		OSMutex_Lock(renderMtx);
@@ -944,7 +782,7 @@ static UINT8 HandleKeyPress(bool waitForKey)
 		OSMutex_Unlock(renderMtx);
 		break;
 	case 'R':	// restart
-		if (! (playState & PLAYSTATE_PLAY))
+		if (! (mediaInfo._playState & PLAYSTATE_PLAY))
 			break;
 		OSMutex_Lock(renderMtx);
 		myPlayer.Reset();
@@ -955,7 +793,7 @@ static UINT8 HandleKeyPress(bool waitForKey)
 	case KEY_RIGHT:
 	case KEY_CTRL | KEY_LEFT:
 	case KEY_CTRL | KEY_RIGHT:
-		if (! (playState & PLAYSTATE_PLAY))
+		if (! (mediaInfo._playState & PLAYSTATE_PLAY))
 			break;
 		{
 			UINT32 destPos;
@@ -981,20 +819,20 @@ static UINT8 HandleKeyPress(bool waitForKey)
 	case KEY_PPAGE:
 		if (curSong <= 0)
 			break;
-		playState |= PLAYSTATE_END;
+		mediaInfo._playState |= PLAYSTATE_END;
 		controlVal = -1;
 		return 0x10;
 	case 'N':	// next file
 	case KEY_NPAGE:
 		if (curSong + 1 >= songList.size())
 			break;
-		playState |= PLAYSTATE_END;
+		mediaInfo._playState |= PLAYSTATE_END;
 		controlVal = +1;
 		return 0x10;
 	default:
 		if (keyCode >= '0' && keyCode <= '9')
 		{
-			if (! (playState & PLAYSTATE_PLAY))
+			if (! (mediaInfo._playState & PLAYSTATE_PLAY))
 				break;
 			
 			UINT32 maxPos;
@@ -1025,16 +863,16 @@ static UINT8 HandleMediaKeyPress(void)
 	switch(evtCode)
 	{
 	case MMKEY_PLAY:	// pause
-		if (! (playState & PLAYSTATE_PLAY))
+		if (! (mediaInfo._playState & PLAYSTATE_PLAY))
 			break;
-		playState ^= PLAYSTATE_PAUSE;
+		mediaInfo._playState ^= PLAYSTATE_PAUSE;
 		/*if (genOpts.soundWhilePaused)
 		{
 			// TODO
 		}
 		else*/ if (adOut.data != NULL)
 		{
-			if (playState & PLAYSTATE_PAUSE)
+			if (mediaInfo._playState & PLAYSTATE_PAUSE)
 				AudioDrv_Pause(adOut.data);
 			else
 				AudioDrv_Resume(adOut.data);
@@ -1044,13 +882,13 @@ static UINT8 HandleMediaKeyPress(void)
 	case MMKEY_PREV:	// previous file (back)
 		if (curSong <= 0)
 			break;
-		playState |= PLAYSTATE_END;
+		mediaInfo._playState |= PLAYSTATE_END;
 		controlVal = -1;
 		return 0x10;
 	case MMKEY_NEXT:	// next file
 		if (curSong + 1 >= songList.size())
 			break;
-		playState |= PLAYSTATE_END;
+		mediaInfo._playState |= PLAYSTATE_END;
 		controlVal = +1;
 		return 0x10;
 	}
@@ -1060,35 +898,25 @@ static UINT8 HandleMediaKeyPress(void)
 
 void ExternalVGMSeek(bool relative, INT32 seekSmpls)	// for external use
 {
-	if (! (playState & PLAYSTATE_PLAY))
+	if (! (mediaInfo._playState & PLAYSTATE_PLAY))
 		return;
 	
 	OSMutex_Lock(renderMtx);
 	if (relative)
 	{
-		UINT32 destPos = myPlayer.GetCurPos(PLAYPOS_SAMPLE);
+		UINT32 destPos = mediaInfo._player.GetCurPos(PLAYPOS_SAMPLE);
 		if (seekSmpls < 0 && (UINT32)-seekSmpls > destPos)
 			destPos = 0;
 		else
 			destPos += seekSmpls;
-		myPlayer.Seek(PLAYPOS_SAMPLE, destPos);
+		mediaInfo._player.Seek(PLAYPOS_SAMPLE, destPos);
 	}
 	else
 	{
-		myPlayer.Seek(PLAYPOS_SAMPLE, (UINT32)seekSmpls);
+		mediaInfo._player.Seek(PLAYPOS_SAMPLE, (UINT32)seekSmpls);
 	}
 	OSMutex_Unlock(renderMtx);
 	return;
-}
-
-static inline std::string FCC2Str(UINT32 fcc)
-{
-	std::string result(4, '\0');
-	result[0] = (char)((fcc >> 24) & 0xFF);
-	result[1] = (char)((fcc >> 16) & 0xFF);
-	result[2] = (char)((fcc >>  8) & 0xFF);
-	result[3] = (char)((fcc >>  0) & 0xFF);
-	return result;
 }
 
 static INT8 GetTimeDispMode(double seconds)
@@ -1172,12 +1000,12 @@ static UINT8 FilePlayCallback(PlayerBase* player, void* userParam, UINT8 evtType
 		//printf("Playback stopped.\n");
 		break;
 	case PLREVT_LOOP:
-		if (myPlayer.GetState() & PLAYSTATE_SEEK)
+		if (mediaInfo._player.GetState() & PLAYSTATE_SEEK)
 			break;
 		//printf("Loop %u.\n", 1 + *(UINT32*)evtParam);
 		break;
 	case PLREVT_END:
-		playState |= PLAYSTATE_END;
+		mediaInfo._playState |= PLAYSTATE_END;
 		//printf("Song End.\n");
 		break;
 	}
@@ -1290,6 +1118,7 @@ static UINT8 InitAudioDriver(AudioDriver* aDrv)
 // initialize audio system and search for requested audio drivers
 static UINT8 InitAudioSystem(void)
 {
+	const GeneralOptions& genOpts = mediaInfo._genOpts;
 	AUDDRV_INFO* drvInfo;
 	UINT8 retVal;
 	UINT8 drvEnable;
@@ -1411,6 +1240,7 @@ static UINT8 DeinitAudioSystem(void)
 
 static UINT8 StartAudioDevice(void)
 {
+	const GeneralOptions& genOpts = mediaInfo._genOpts;
 	AUDIO_OPTS* opts;
 	UINT8 retVal;
 	UINT32 smplSize;
@@ -1455,7 +1285,7 @@ static UINT8 StartAudioDevice(void)
 	}
 	
 	audioBuf.resize(localBufSize);
-	myPlayer.SetOutputSettings(opts->sampleRate, opts->numChannels, opts->numBitsPerSmpl, smplAlloc);
+	mediaInfo._player.SetOutputSettings(opts->sampleRate, opts->numChannels, opts->numBitsPerSmpl, smplAlloc);
 	
 	return AERR_OK;
 }
