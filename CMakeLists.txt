@@ -112,6 +112,7 @@ set(PLAYER_HEADERS
 	utils.hpp
 	config.hpp
 	m3uargparse.hpp
+	mediainfo.hpp
 	playcfg.hpp
 	version.h
 )
@@ -120,6 +121,7 @@ set(PLAYER_FILES
 	config.cpp
 	m3uargparse.cpp
 	main.cpp
+	mediainfo.cpp
 	playctrl.cpp
 	playcfg.cpp
 )

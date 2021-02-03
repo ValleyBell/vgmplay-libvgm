@@ -338,3 +338,38 @@ void u8printf(const char* format, ...)
 	return;
 }
 #endif	// defined(_WIN32)
+
+std::string urlencode(const std::string& str)
+{
+	// Don't try to encode blank strings
+	if (str.empty())
+		return std::string();
+	
+	static const char* HEX_DIGITS = "0123456789ABCDEF";
+	static const char* UNSAFE_CHRS = " #$%&+,:;=?@";
+	char charbuf[] = "%00";
+	std::string newstr;
+	newstr.reserve(str.length());
+	
+	for (size_t i = 0; i < str.length(); i++)
+	{
+		// http://www.blooberry.com/indexdot/html/topics/urlencoding.htm
+		unsigned char c = (unsigned char)str[i];
+		
+		bool doEscape = (c < 0x80);
+		if (! doEscape)
+			doEscape = ! isprint(c) || (strchr(UNSAFE_CHRS, c) != NULL);
+		
+		if (doEscape)
+		{
+			charbuf[1] = HEX_DIGITS[(c >> 4) & 0x0F];
+			charbuf[2] = HEX_DIGITS[(c >> 0) & 0x0F];
+			newstr += charbuf;
+		}
+		else
+		{
+			newstr += str[i];
+		}
+	}
+	return newstr;
+}

@@ -45,8 +45,8 @@ They weren't lying when they said that using libdbus directly signs you up for s
 // DBus MPRIS Constants
 #define DBUS_MPRIS_PATH             "/org/mpris/MediaPlayer2"
 #define DBUS_MPRIS_MEDIAPLAYER2     "org.mpris.MediaPlayer2"
-#define DBUS_MPRIS_PLAYER           "org.mpris.MediaPlayer2.Player"
-#define DBUS_MPRIS_VGMPLAY          "org.mpris.MediaPlayer2.vgmplay"
+#define DBUS_MPRIS_PLAYER           DBUS_MPRIS_MEDIAPLAYER2 ".Player"
+#define DBUS_MPRIS_VGMPLAY          DBUS_MPRIS_MEDIAPLAYER2 ".vgmplay"
 #define DBUS_PROPERTIES             "org.freedesktop.DBus.Properties"
 
 //#define DBUS_DEBUG
@@ -95,52 +95,6 @@ static inline void invalidateArtCache()
 	artpath.clear();
 }
 
-static std::string urlencode(const std::string& str)
-{
-	// Don't try to encode blank strings
-	if (str.empty())
-		return std::string();
-
-	char charbuf[4] = {'\0', '\0', '\0', '\0'};
-	std::string newstr;
-	// strlen("file://") + max str size + \0
-	newstr.reserve(7 + str.length() * 3 + 1);
-
-	newstr = "file://";
-	for (size_t i = 0; i < str.length(); i++)
-	{
-		// http://www.blooberry.com/indexdot/html/topics/urlencoding.htm
-		unsigned char c = (unsigned char)str[i];
-		switch(c)
-		{
-		case ' ':
-		case '$':
-		case '&':
-		case '+':
-		case ',':
-		case ':':
-		case ';':
-		case '=':
-		case '?':
-		case '@':
-			snprintf(charbuf, 4, "%%%02X", c);
-			newstr += charbuf;
-			break;
-		default:
-			if(c > 0x7F)
-			{
-				snprintf(charbuf, 4, "%%%02X", c);
-				newstr += charbuf;
-			}
-			else
-			{
-				newstr += str[i];
-			}
-			break;
-		}
-	}
-	return newstr;
-}
 
 // Return current position in samples
 static inline INT32 ReturnSamplePos(INT64 UsecPos, const PlayerA& player)
@@ -168,7 +122,7 @@ static void DBusEmptyMethodResponse(DBusConnection* connection, DBusMessage* req
 
 static void DBusReplyToIntrospect(DBusConnection* connection, DBusMessage* request)
 {
-	const char* introspection_data =
+	static const char* introspection_data =
 "<!DOCTYPE node PUBLIC \"-//freedesktop//DTD D-BUS Object Introspection 1.0//EN\"\n"
 "\"http://www.freedesktop.org/standards/dbus/1.0/introspect.dtd\">\n"
 "<node>\n"
@@ -204,7 +158,7 @@ static void DBusReplyToIntrospect(DBusConnection* connection, DBusMessage* reque
 "      <arg type=\"as\"/>\n"
 "    </signal>\n"
 "  </interface>\n"
-"  <interface name=\"org.mpris.MediaPlayer2\">\n"
+"  <interface name=\"" DBUS_MPRIS_MEDIAPLAYER2 "\">\n"
 "    <property name=\"Identity\" type=\"s\" access=\"read\" />\n"
 "    <property name=\"DesktopEntry\" type=\"s\" access=\"read\" />\n"
 "    <property name=\"SupportedMimeTypes\" type=\"as\" access=\"read\" />\n"
@@ -215,7 +169,7 @@ static void DBusReplyToIntrospect(DBusConnection* connection, DBusMessage* reque
 "    <method name=\"Quit\" />\n"
 "    <method name=\"Raise\" />\n"
 "  </interface>\n"
-"  <interface name=\"org.mpris.MediaPlayer2.Player\">\n"
+"  <interface name=\"" DBUS_MPRIS_PLAYER "\">\n"
 "    <property name=\"Metadata\" type=\"a{sv}\" access=\"read\" />\n"
 "    <property name=\"PlaybackStatus\" type=\"s\" access=\"read\" />\n"
 "    <property name=\"Volume\" type=\"d\" access=\"readwrite\" />\n"
@@ -488,7 +442,7 @@ static void DBusSendMetadata(DBusMessageIter* dict_root)
 #endif
 
 	// URL encode the path to the png
-	std::string arturlescaped = urlencode(artpath);
+	std::string arturlescaped = std::string("file://") + urlencode(artpath);
 
 	// Game release date
 	const char* utf8release = GetTagForDisp(*songTags, "DATE");
@@ -576,10 +530,10 @@ static void DBusSendMetadata(DBusMessageIter* dict_root)
 	else
 		lastsep = sfl.fileName.c_str();
 	pathurl += lastsep;
-	std::string url = urlencode(pathurl);
+	std::string url = std::string("file://") + urlencode(pathurl);
 
 	// Stubs
-	const char* trackid = "/org/mpris/MediaPlayer2/CurrentTrack";
+	const char* trackid = DBUS_MPRIS_PATH "/CurrentTrack";
 	const char* lastused = "2018-01-04T12:21:32Z";
 	int32_t discnum = 1;
 	int32_t usecnt = 0;
@@ -608,23 +562,9 @@ static void DBusSendMetadata(DBusMessageIter* dict_root)
 		{ "vgm:system",         DBUS_TYPE_STRING_AS_STRING, &utf8system,    DBUS_TYPE_STRING,   0 },
 		{ "vgm:version",        DBUS_TYPE_UINT32_AS_STRING, &version,       DBUS_TYPE_UINT32,   0 },
 		{ "vgm:loop",           DBUS_TYPE_INT64_AS_STRING,  &loop,          DBUS_TYPE_INT64,    0 },
-		//{ "vgm:chips",          "as",                       &chips,         DBUS_TYPE_ARRAY,    chipslen },
+		{ "vgm:chips",          "as",                       &chips,         DBUS_TYPE_ARRAY,    chipslen },
 	};
 	DBusSendMetadataArray(dict_root, meta, sizeof(meta)/sizeof(*meta));
-
-	// Free everything
-#if 0
-	for(size_t i = 0; i < chipslen; i++)
-	{
-		// If the next pointer is the same as the current one, don't free it.
-		char** ptr = chips[i].content;
-		if(ptr == chips[i+1].content)
-			continue;
-		char* ch = *ptr;
-		free(ptr);
-		free(ch);
-	}
-#endif
 }
 
 static void DBusSendPlaybackStatus(DBusMessageIter* args)
@@ -964,7 +904,7 @@ static DBusHandlerResult DBusHandler(DBusConnection* connection, DBusMessage* me
 		const char* title;
 		const char* strresponse;
 
-		if(!strcmp(method_interface_arg, "org.mpris.MediaPlayer2"))
+		if(!strcmp(method_interface_arg, DBUS_MPRIS_MEDIAPLAYER2))
 		{
 			// a{sv}
 			DBusMessageIter dict, dict_entry;

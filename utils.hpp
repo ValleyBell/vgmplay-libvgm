@@ -26,5 +26,6 @@ int count_digits(int value);
 void RemoveControlChars(std::string& str);
 void RemoveQuotationMarks(std::string& str, char quotMark);
 void u8printf(const char* format, ...);
+std::string urlencode(const std::string& str);
 
 #endif	// __UTILS_HPP__
