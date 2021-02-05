@@ -31,7 +31,7 @@ They weren't lying when they said that using libdbus directly signs you up for s
 #include <stdtype.h>
 #include <player/playera.hpp>
 #include "utils.hpp"
-#include "mmkeys.h"
+#include "mmkeys.hpp"
 #include "dbus.hpp"
 
 #define MAX_PATH PATH_MAX
@@ -61,9 +61,6 @@ typedef struct DBusMetadata_
 	size_t childLen;
 } DBusMetadata;
 
-
-// Seek Function from playctrl.cpp
-void ExternalVGMSeek(bool relative, INT32 seekSmpls);
 
 // Needed for loop detection
 static UINT32 OldLoopCount;
@@ -1044,7 +1041,7 @@ static DBusHandlerResult DBusHandler(DBusConnection* connection, DBusMessage* me
 		printf("Seek called with %lld\n", (long long)offset);
 #endif
 		INT32 TargetSeekPos = ReturnSamplePos(offset, mInf->_player);
-		ExternalVGMSeek(true, TargetSeekPos);
+		mInf->Event(MI_EVT_SEEK_REL, TargetSeekPos);
 
 		DBusEmptyMethodResponse(connection, message);
 
@@ -1053,33 +1050,42 @@ static DBusHandlerResult DBusHandler(DBusConnection* connection, DBusMessage* me
 
 		return DBUS_HANDLER_RESULT_HANDLED;
 	}
-	//Respond to Play/PlayPause/Pause
-	else if(dbus_message_is_method_call(message, DBUS_MPRIS_PLAYER, "Play") || dbus_message_is_method_call(message, DBUS_MPRIS_PLAYER, "PlayPause") || dbus_message_is_method_call(message, DBUS_MPRIS_PLAYER, "Pause"))
+	else if(dbus_message_is_method_call(message, DBUS_MPRIS_PLAYER, "Play"))
 	{
 		DBusEmptyMethodResponse(connection, message);
-		evtCallback(MMKEY_PLAY);
-
+		mInf->Event(MI_EVT_PAUSE, MIE_PS_RESUME);
 		return DBUS_HANDLER_RESULT_HANDLED;
 	}
-	// Stop is currently a stub
+	else if(dbus_message_is_method_call(message, DBUS_MPRIS_PLAYER, "Pause"))
+	{
+		DBusEmptyMethodResponse(connection, message);
+		mInf->Event(MI_EVT_PAUSE, MIE_PS_PAUSE);
+		return DBUS_HANDLER_RESULT_HANDLED;
+	}
+	else if(dbus_message_is_method_call(message, DBUS_MPRIS_PLAYER, "PlayPause"))
+	{
+		DBusEmptyMethodResponse(connection, message);
+		mInf->Event(MI_EVT_PAUSE, MIE_PS_TOGGLE);
+		return DBUS_HANDLER_RESULT_HANDLED;
+	}
 	else if(dbus_message_is_method_call(message, DBUS_MPRIS_PLAYER, "Stop"))
 	{
 		DBusEmptyMethodResponse(connection, message);
+		mInf->Event(MI_EVT_CONTROL, MIE_CTRL_STOP);	// currently no effect
 		return DBUS_HANDLER_RESULT_HANDLED;
 	}
 	//Respond to Previous
 	else if(dbus_message_is_method_call(message, DBUS_MPRIS_PLAYER, "Previous"))
 	{
 		DBusEmptyMethodResponse(connection, message);
-		evtCallback(MMKEY_PREV);
-
+		mInf->Event(MI_EVT_PLIST, MIE_PL_PREV);
 		return DBUS_HANDLER_RESULT_HANDLED;
 	}
 	//Respond to Next
 	else if(dbus_message_is_method_call(message, DBUS_MPRIS_PLAYER, "Next"))
 	{
 		DBusEmptyMethodResponse(connection, message);
-		evtCallback(MMKEY_NEXT);
+		mInf->Event(MI_EVT_PLIST, MIE_PL_NEXT);
 		return DBUS_HANDLER_RESULT_HANDLED;
 	}
 	else if(dbus_message_is_method_call(message, DBUS_MPRIS_PLAYER, "SetPosition"))
@@ -1090,7 +1096,7 @@ static DBusHandlerResult DBusHandler(DBusConnection* connection, DBusMessage* me
 			return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
 
 		INT32 seek_pos = ReturnSamplePos(pos, mInf->_player);
-		ExternalVGMSeek(false, seek_pos);
+		mInf->Event(MI_EVT_SEEK_ABS, seek_pos);
 
 		DBusEmptyMethodResponse(connection, message);
 		DBus_EmitSignal(SIGNAL_SEEK);

@@ -2,7 +2,8 @@
 #include <stdio.h>
 
 #include <stdtype.h>
-#include "mmkeys.h"
+#include "mmkeys.hpp"
+#include "mediainfo.hpp"
 
 #ifndef VK_MEDIA_NEXT_TRACK
 // from WinUser.h
@@ -15,7 +16,28 @@
 static DWORD idThread = 0;
 static HANDLE hThread = NULL;
 static HANDLE hEvent = NULL;
-static mmkey_cbfunc evtCallback = NULL;
+static MediaInfo* mInf;
+
+static UINT8 HandleMediaKeyPress(int evtCode)
+{
+	switch(evtCode)
+	{
+	case VK_MEDIA_PLAY_PAUSE:
+		mInf->Event(MI_EVT_PAUSE, MIE_PS_TOGGLE);
+		break;
+	case VK_MEDIA_STOP:
+		mInf->Event(MI_EVT_CONTROL, MIE_CTRL_STOP);
+		break;
+	case VK_MEDIA_PREV_TRACK:
+		mInf->Event(MI_EVT_PLIST, MIE_PL_PREV);
+		break;
+	case VK_MEDIA_NEXT_TRACK:
+		mInf->Event(MI_EVT_PLIST, MIE_PL_NEXT);
+		break;
+	}
+
+	return 1;
+}
 
 static DWORD WINAPI KeyMessageThread(void* args)
 {
@@ -25,33 +47,33 @@ static DWORD WINAPI KeyMessageThread(void* args)
 	// enforce creation of message queue
 	PeekMessage(&msg, NULL, WM_USER, WM_USER, PM_NOREMOVE);
 	
-	retValB = RegisterHotKey(NULL, MMKEY_PLAY, 0, VK_MEDIA_PLAY_PAUSE);
-	retValB = RegisterHotKey(NULL, MMKEY_PREV, 0, VK_MEDIA_PREV_TRACK);
-	retValB = RegisterHotKey(NULL, MMKEY_NEXT, 0, VK_MEDIA_NEXT_TRACK);
+	retValB = RegisterHotKey(NULL, VK_MEDIA_PLAY_PAUSE, 0, VK_MEDIA_PLAY_PAUSE);
+	//retValB = RegisterHotKey(NULL, VK_MEDIA_STOP, 0, VK_MEDIA_STOP);
+	retValB = RegisterHotKey(NULL, VK_MEDIA_PREV_TRACK, 0, VK_MEDIA_PREV_TRACK);
+	retValB = RegisterHotKey(NULL, VK_MEDIA_NEXT_TRACK, 0, VK_MEDIA_NEXT_TRACK);
 	
 	SetEvent(hEvent);
 	
 	while(retValB = GetMessage(&msg, NULL, 0, 0))
 	{
 		if (msg.message == WM_HOTKEY)
-		{
-			if (evtCallback != NULL)
-				evtCallback((UINT8)msg.wParam);
-		}
+			HandleMediaKeyPress(msg.wParam);
 	}
 	
-	UnregisterHotKey(NULL, MMKEY_PLAY);
-	UnregisterHotKey(NULL, MMKEY_PREV);
-	UnregisterHotKey(NULL, MMKEY_NEXT);
+	UnregisterHotKey(NULL, VK_MEDIA_PLAY_PAUSE);
+	//UnregisterHotKey(NULL, VK_MEDIA_STOP);
+	UnregisterHotKey(NULL, VK_MEDIA_PREV_TRACK);
+	UnregisterHotKey(NULL, VK_MEDIA_NEXT_TRACK);
 	
 	return 0;
 }
 
-UINT8 MultimediaKeyHook_Init(void)
+UINT8 MultimediaKeyHook_Init(MediaInfo& mediaInfo)
 {
 	if (hThread != NULL)
 		return 0x01;
 	
+	mInf = &mediaInfo;
 	hEvent = CreateEvent(NULL, FALSE, FALSE, NULL);
 	hThread = CreateThread(NULL, 0x00, KeyMessageThread, NULL, 0x00, &idThread);
 	if (hThread == NULL)
@@ -75,14 +97,3 @@ void MultimediaKeyHook_Deinit(void)
 	
 	return;
 }
-
-void MultimediaKeyHook_SetCallback(mmkey_cbfunc callbackFunc)
-{
-	evtCallback = callbackFunc;
-	
-	return;
-}
-
-// TODO: use advanced features supported by Windows SystemMediaTransportControls Class
-// https://docs.microsoft.com/en-us/uwp/api/windows.media.systemmediatransportcontrols
-// example: https://searchfox.org/mozilla-central/source/widget/windows/WindowsSMTCProvider.cpp

@@ -192,3 +192,23 @@ void MediaInfo::EnumerateChips(void)
 	
 	return;
 }
+
+void MediaInfo::AddSignalCallback(MI_SIGNAL_CB func, void* param)
+{
+	_sigCb.push_back({func, param});
+	return;
+}
+
+void MediaInfo::Event(UINT8 evtType, INT32 evtParam)
+{
+	_evtQueue.push({evtType, evtParam});
+	return;
+}
+
+void MediaInfo::Signal(UINT8 signalMask)
+{
+	std::vector<SignalHandler>::iterator scbIt;
+	for (scbIt = _sigCb.begin(); scbIt != _sigCb.end(); ++scbIt)
+		scbIt->func(this, scbIt->param, signalMask);
+	return;
+}

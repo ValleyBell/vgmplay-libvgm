@@ -42,7 +42,7 @@ extern "C" int __cdecl _kbhit(void);
 #include "playcfg.hpp"
 #include "mediainfo.hpp"
 #include "version.h"
-#include "mmkeys.h"
+#include "mmkeys.hpp"
 #include "dbus.hpp"
 
 
@@ -59,16 +59,16 @@ struct AudioDriver
 
 UINT8 PlayerMain(UINT8 showFileName);
 static bool AdvanceSongList(size_t& songIdx, int controlVal);
-static void MMKey_Event(UINT8 event);
 static DATA_LOADER* GetFileLoaderUTF8(const std::string& fileName);
 static UINT8 OpenFile(const std::string& fileName, DATA_LOADER*& dLoad, PlayerBase*& player);
 static void PreparePlayback(void);
 static void ShowSongInfo(void);
-static void ShowConsoleTitle(const std::string& fileName, const std::string& titleTag, const std::string& gameTag);
+static void ShowConsoleTitle(void);
 static UINT8 PlayFile(void);
+static UINT8 HandleCtrlEvent(UINT8 evtType, INT32 evtParam);
+
 static int GetPressedKey(void);
 static UINT8 HandleKeyPress(bool waitForKey);
-static UINT8 HandleMediaKeyPress(void);
 static INT8 GetTimeDispMode(double seconds);
 static std::string GetTimeStr(double seconds, INT8 showHours = 0);
 static UINT32 FillBuffer(void* drvStruct, void* userParam, UINT32 bufSize, void* Data);
@@ -191,8 +191,7 @@ UINT8 PlayerMain(UINT8 showFileName)
 	}
 	mediaInfo._pbSongCnt = songList.size();
 	
-	MultimediaKeyHook_Init();
-	MultimediaKeyHook_SetCallback(&MMKey_Event);
+	MultimediaKeyHook_Init(mediaInfo);
 	DBus_Init(mediaInfo);
 	
 #ifndef _WIN32
@@ -251,6 +250,12 @@ UINT8 PlayerMain(UINT8 showFileName)
 			if (curSong == 0 && controlVal < 0)
 				controlVal = +1;
 			HandleKeyPress(true);
+			if (! mediaInfo._evtQueue.empty())
+			{
+				MediaInfo::EventData ed = mediaInfo._evtQueue.front();
+				mediaInfo._evtQueue.pop();
+				retVal = HandleCtrlEvent(ed.evt, ed.value);
+			}
 			if (! AdvanceSongList(curSong, controlVal))
 				break;
 			else
@@ -271,7 +276,7 @@ UINT8 PlayerMain(UINT8 showFileName)
 		mediaInfo._fileStartPos = myPlayer.GetCurPos(PLAYPOS_FILEOFS);	// get position after processing initialization block
 		timeDispMode = GetTimeDispMode(myPlayer.GetTotalTime(0));
 		if (genOpts.setTermTitle)
-			ShowConsoleTitle(mediaInfo._songPath, mediaInfo.GetSongTagForDisp("TITLE"), mediaInfo.GetSongTagForDisp("GAME"));
+			ShowConsoleTitle();
 		ShowSongInfo();
 		
 		retVal = StartDiskWriter(sfl.fileName);
@@ -326,13 +331,6 @@ static bool AdvanceSongList(size_t& songIdx, int controlVal)
 			songIdx --;
 	}
 	return true;
-}
-
-static void MMKey_Event(UINT8 event)
-{
-	lastMMEvent = event;
-	
-	return;
 }
 
 static DATA_LOADER* GetFileLoaderUTF8(const std::string& fileNameU8)
@@ -488,8 +486,11 @@ static void ShowSongInfo(void)
 	return;
 }
 
-static void ShowConsoleTitle(const std::string& fileName, const std::string& titleTag, const std::string& gameTag)
+static void ShowConsoleTitle(void)
 {
+	const std::string& fileName = mediaInfo._songPath;
+	std::string titleTag = mediaInfo.GetSongTagForDisp("TITLE");
+	std::string gameTag = mediaInfo.GetSongTagForDisp("GAME");
 	std::string titleStr;
 	
 	// show "Song (Game) - VGM Player" as console title
@@ -508,7 +509,7 @@ static void ShowConsoleTitle(const std::string& fileName, const std::string& tit
 	wchar_t* titleWStr = NULL;
 	UINT8 retVal = CPConv_StrConvert(cpcU8_Wide, &titleWLen, reinterpret_cast<char**>(&titleWStr),
 		titleStr.length() + 1, titleStr.c_str());	// length()+1 to include the \0
-	if (retVal != NULL)
+	if (retVal < 0x80)
 		SetConsoleTitleW(titleWStr);		// Set Windows Console Title
 	free(titleWStr);
 #else
@@ -576,9 +577,14 @@ static UINT8 PlayFile(void)
 		}
 		
 		DBus_ReadWriteDispatch();
-		retVal = HandleMediaKeyPress();
-		if (! retVal)
-			retVal = HandleKeyPress(false);
+		HandleKeyPress(false);
+		retVal = 0x00;
+		if (! mediaInfo._evtQueue.empty())	// TODO: thread-safety
+		{
+			MediaInfo::EventData ed = mediaInfo._evtQueue.front();
+			mediaInfo._evtQueue.pop();
+			retVal = HandleCtrlEvent(ed.evt, ed.value);
+		}
 		if (retVal)
 		{
 			needRefresh = true;
@@ -620,6 +626,135 @@ static UINT8 PlayFile(void)
 	
 	return 0x00;
 }
+
+static UINT8 HandleCtrlEvent(UINT8 evtType, INT32 evtParam)
+{
+	const GeneralOptions& genOpts = mediaInfo._genOpts;
+	PlayerA& myPlayer = mediaInfo._player;
+	
+	switch(evtType)
+	{
+	case MI_EVT_PLIST:
+		switch(evtParam)
+		{
+		case MIE_PL_QUIT:	// quit
+			mediaInfo._playState |= PLAYSTATE_END;
+			controlVal = +9;
+			return 0x10;
+		case MIE_PL_PREV:	// previous file
+			if (curSong <= 0)
+				break;
+			mediaInfo._playState |= PLAYSTATE_END;
+			controlVal = -1;
+			return 0x10;
+		case MIE_PL_NEXT:	// next file
+			if (curSong + 1 >= songList.size())
+				break;
+			mediaInfo._playState |= PLAYSTATE_END;
+			controlVal = +1;
+			return 0x10;
+		}
+		break;
+	case MI_EVT_CONTROL:
+		switch(evtParam)
+		{
+		case MIE_CTRL_START:	// start
+			break;	// not implemented
+		case MIE_CTRL_STOP:	// stop
+			//return 0x10;
+			break;	// not implemented
+		case MIE_CTRL_RESTART:	// restart
+			if (! (mediaInfo._playState & PLAYSTATE_PLAY))
+				break;
+			OSMutex_Lock(renderMtx);
+			myPlayer.Reset();
+			OSMutex_Unlock(renderMtx);
+			DBus_EmitSignal(SIGNAL_SEEK);
+			return 0x01;
+		}
+		break;
+	case MI_EVT_PAUSE:
+		if (! (mediaInfo._playState & PLAYSTATE_PLAY))
+			break;
+		switch(evtParam)
+		{
+		case MIE_PS_PAUSE:	// pause
+			mediaInfo._playState |= PLAYSTATE_PAUSE;
+			break;
+		case MIE_PS_RESUME:	// resume
+			mediaInfo._playState &= ~PLAYSTATE_PAUSE;
+			break;
+		case MIE_PS_TOGGLE:	// pause toggle
+			mediaInfo._playState ^= PLAYSTATE_PAUSE;
+			break;
+		}
+		/*if (genOpts.soundWhilePaused)
+		{
+			// TODO
+		}
+		else*/ if (adOut.data != NULL)
+		{
+			if (mediaInfo._playState & PLAYSTATE_PAUSE)
+				AudioDrv_Pause(adOut.data);
+			else
+				AudioDrv_Resume(adOut.data);
+		}
+		DBus_EmitSignal(SIGNAL_PLAYSTATUS); // Emit status change signal
+		return 0x01;
+	case MI_EVT_FADE:	// fade out
+		if (! (mediaInfo._playState & PLAYSTATE_PLAY))
+			break;
+		// enforce "non-playlist" fade-out
+		OSMutex_Lock(renderMtx);
+		myPlayer.SetFadeSamples(MSec2Samples(genOpts.fadeTime_single, myPlayer));
+		myPlayer.FadeOut();
+		OSMutex_Unlock(renderMtx);
+		return 0x01;
+	case MI_EVT_SEEK_REL:
+		if (! (mediaInfo._playState & PLAYSTATE_PLAY))
+			break;
+		OSMutex_Lock(renderMtx);
+		{
+			UINT32 destPos = mediaInfo._player.GetCurPos(PLAYPOS_SAMPLE);
+			if (evtParam < 0 && (UINT32)-evtParam > destPos)
+				destPos = 0;
+			else
+				destPos += evtParam;
+			mediaInfo._player.Seek(PLAYPOS_SAMPLE, destPos);
+		}
+		OSMutex_Unlock(renderMtx);
+		DBus_EmitSignal(SIGNAL_SEEK);
+		return 0x01;
+	case MI_EVT_SEEK_ABS:
+		if (! (mediaInfo._playState & PLAYSTATE_PLAY))
+			break;
+		OSMutex_Lock(renderMtx);
+		mediaInfo._player.Seek(PLAYPOS_SAMPLE, (UINT32)evtParam);
+		OSMutex_Unlock(renderMtx);
+		DBus_EmitSignal(SIGNAL_SEEK);
+		return 0x01;
+	case MI_EVT_SEEK_PERC:
+		if (! (mediaInfo._playState & PLAYSTATE_PLAY))
+			break;
+		if (evtParam < 0)
+			evtParam = 0;
+		{
+			UINT32 maxPos;
+			UINT32 destPos;
+			
+			OSMutex_Lock(renderMtx);
+			maxPos = myPlayer.GetPlayer()->GetTotalPlayTicks(genOpts.maxLoops);
+			destPos = maxPos * evtParam / 100;
+			myPlayer.Seek(PLAYPOS_TICK, destPos);
+			OSMutex_Unlock(renderMtx);
+			DBus_EmitSignal(SIGNAL_SEEK);
+		}
+		return 0x01;
+	}
+	
+	return 0x00;
+}
+
 
 #ifdef WIN32
 static int GetPressedKey(void)
@@ -741,9 +876,6 @@ static UINT8 HandleKeyPress(bool waitForKey)
 	if (! waitForKey && ! _kbhit())
 		return 0;
 	
-	const GeneralOptions& genOpts = mediaInfo._genOpts;
-	PlayerA& myPlayer = mediaInfo._player;
-	
 	int keyCode = GetPressedKey();
 	if (keyCode >= 'a' && keyCode <= 'z')
 		keyCode = toupper(keyCode);
@@ -751,172 +883,47 @@ static UINT8 HandleKeyPress(bool waitForKey)
 	{
 	case 0x1B:	// ESC
 	case 'Q':	// quit
-		mediaInfo._playState |= PLAYSTATE_END;
-		controlVal = +9;
-		return 0x10;
+		mediaInfo.Event(MI_EVT_PLIST, MIE_PL_QUIT);
+		break;
 	case ' ':
 	case 'P':	// pause
-		if (! (mediaInfo._playState & PLAYSTATE_PLAY))
-			break;
-		mediaInfo._playState ^= PLAYSTATE_PAUSE;
-		/*if (genOpts.soundWhilePaused)
-		{
-			// TODO
-		}
-		else*/ if (adOut.data != NULL)
-		{
-			if (mediaInfo._playState & PLAYSTATE_PAUSE)
-				AudioDrv_Pause(adOut.data);
-			else
-				AudioDrv_Resume(adOut.data);
-		}
-		DBus_EmitSignal(SIGNAL_PLAYSTATUS); // Emit status change signal
+		mediaInfo.Event(MI_EVT_PAUSE, MIE_PS_TOGGLE);
 		break;
 	case 'F':	// fade out
-		if (! (mediaInfo._playState & PLAYSTATE_PLAY))
-			break;
-		// enforce "non-playlist" fade-out
-		OSMutex_Lock(renderMtx);
-		myPlayer.SetFadeSamples(MSec2Samples(genOpts.fadeTime_single, myPlayer));
-		myPlayer.FadeOut();
-		OSMutex_Unlock(renderMtx);
+		mediaInfo.Event(MI_EVT_FADE, 0);
 		break;
 	case 'R':	// restart
-		if (! (mediaInfo._playState & PLAYSTATE_PLAY))
-			break;
-		OSMutex_Lock(renderMtx);
-		myPlayer.Reset();
-		OSMutex_Unlock(renderMtx);
-		DBus_EmitSignal(SIGNAL_SEEK);
+		mediaInfo.Event(MI_EVT_CONTROL, MIE_CTRL_RESTART);
 		break;
 	case KEY_LEFT:
 	case KEY_RIGHT:
 	case KEY_CTRL | KEY_LEFT:
 	case KEY_CTRL | KEY_RIGHT:
-		if (! (mediaInfo._playState & PLAYSTATE_PLAY))
-			break;
 		{
-			UINT32 destPos;
-			INT32 seekSmpls;
-			
 			INT32 secs = (keyCode & KEY_CTRL) ? 60 : 5;	// 5s [not ctrl] or 60s [ctrl]
 			if ((keyCode & KEY_MASK) == KEY_LEFT)
 				secs *= -1;	// seek back
-			
-			OSMutex_Lock(renderMtx);
-			destPos = myPlayer.GetCurPos(PLAYPOS_SAMPLE);
-			seekSmpls = myPlayer.GetSampleRate() * secs;
-			if (seekSmpls < 0 && (UINT32)-seekSmpls > destPos)
-				destPos = 0;
-			else
-				destPos += seekSmpls;
-			myPlayer.Seek(PLAYPOS_SAMPLE, destPos);
-			OSMutex_Unlock(renderMtx);
-			DBus_EmitSignal(SIGNAL_SEEK);
+			mediaInfo.Event(MI_EVT_SEEK_REL, mediaInfo._player.GetSampleRate() * secs);
 		}
 		break;
 	case 'B':	// previous file (back)
 	case KEY_PPAGE:
-		if (curSong <= 0)
-			break;
-		mediaInfo._playState |= PLAYSTATE_END;
-		controlVal = -1;
-		return 0x10;
+		mediaInfo.Event(MI_EVT_PLIST, MIE_PL_PREV);
+		break;
 	case 'N':	// next file
 	case KEY_NPAGE:
-		if (curSong + 1 >= songList.size())
-			break;
-		mediaInfo._playState |= PLAYSTATE_END;
-		controlVal = +1;
-		return 0x10;
+		mediaInfo.Event(MI_EVT_PLIST, MIE_PL_NEXT);
+		break;
 	default:
 		if (keyCode >= '0' && keyCode <= '9')
 		{
-			if (! (mediaInfo._playState & PLAYSTATE_PLAY))
-				break;
-			
-			UINT32 maxPos;
-			UINT8 pbPos10;
-			UINT32 destPos;
-			
-			OSMutex_Lock(renderMtx);
-			maxPos = myPlayer.GetPlayer()->GetTotalPlayTicks(genOpts.maxLoops);
-			pbPos10 = keyCode - '0';
-			destPos = maxPos * pbPos10 / 10;
-			myPlayer.Seek(PLAYPOS_TICK, destPos);
-			OSMutex_Unlock(renderMtx);
-			DBus_EmitSignal(SIGNAL_SEEK);
+			UINT8 pbPos10 = keyCode - '0';
+			mediaInfo.Event(MI_EVT_SEEK_PERC, pbPos10 * 10);
 		}
 		break;
 	}
 	
-	return 0x01;
-}
-
-static UINT8 HandleMediaKeyPress(void)
-{
-	if (! lastMMEvent)
-		return 0;
-	
-	UINT8 evtCode = lastMMEvent;
-	lastMMEvent = 0x00;
-	switch(evtCode)
-	{
-	case MMKEY_PLAY:	// pause
-		if (! (mediaInfo._playState & PLAYSTATE_PLAY))
-			break;
-		mediaInfo._playState ^= PLAYSTATE_PAUSE;
-		/*if (genOpts.soundWhilePaused)
-		{
-			// TODO
-		}
-		else*/ if (adOut.data != NULL)
-		{
-			if (mediaInfo._playState & PLAYSTATE_PAUSE)
-				AudioDrv_Pause(adOut.data);
-			else
-				AudioDrv_Resume(adOut.data);
-		}
-		DBus_EmitSignal(SIGNAL_PLAYSTATUS); // Emit status change signal
-		break;
-	case MMKEY_PREV:	// previous file (back)
-		if (curSong <= 0)
-			break;
-		mediaInfo._playState |= PLAYSTATE_END;
-		controlVal = -1;
-		return 0x10;
-	case MMKEY_NEXT:	// next file
-		if (curSong + 1 >= songList.size())
-			break;
-		mediaInfo._playState |= PLAYSTATE_END;
-		controlVal = +1;
-		return 0x10;
-	}
-	
-	return 0x01;
-}
-
-void ExternalVGMSeek(bool relative, INT32 seekSmpls)	// for external use
-{
-	if (! (mediaInfo._playState & PLAYSTATE_PLAY))
-		return;
-	
-	OSMutex_Lock(renderMtx);
-	if (relative)
-	{
-		UINT32 destPos = mediaInfo._player.GetCurPos(PLAYPOS_SAMPLE);
-		if (seekSmpls < 0 && (UINT32)-seekSmpls > destPos)
-			destPos = 0;
-		else
-			destPos += seekSmpls;
-		mediaInfo._player.Seek(PLAYPOS_SAMPLE, destPos);
-	}
-	else
-	{
-		mediaInfo._player.Seek(PLAYPOS_SAMPLE, (UINT32)seekSmpls);
-	}
-	OSMutex_Unlock(renderMtx);
-	return;
+	return 1;
 }
 
 static INT8 GetTimeDispMode(double seconds)
