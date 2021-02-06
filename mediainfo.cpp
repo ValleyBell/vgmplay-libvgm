@@ -1,6 +1,7 @@
 #include <string>
 #include <vector>
 #include <map>
+#include <cmath>
 
 #include <stdtype.h>
 #include <player/playerbase.hpp>
@@ -20,7 +21,6 @@ static inline std::string FCC2Str(UINT32 fcc);
 void MediaInfo::PreparePlayback(void)
 {
 	PlayerBase* player = _player.GetPlayer();
-	const GeneralOptions& genOpts = _genOpts;
 	char verStr[0x20];
 	
 	EnumerateTags();	// must be done before PreparePlayback(), as it may parse some of the tags
@@ -39,7 +39,7 @@ void MediaInfo::PreparePlayback(void)
 		
 		_fileEndPos = vgmhdr->dataEnd;
 		_fileStartPos = vgmhdr->dataOfs;
-		_volGain = pow(2.0, vgmhdr->volumeGain / (double)0x100);
+		_volGain = std::pow(2.0, vgmhdr->volumeGain / (double)0x100);
 		
 		// RAW Log: no loop, no/empty Creator tag, no Title tag
 		if (! vgmhdr->loopOfs && _songTags.find("ENCODED_BY") == _songTags.end() &&

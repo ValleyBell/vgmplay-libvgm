@@ -31,6 +31,7 @@ They weren't lying when they said that using libdbus directly signs you up for s
 #include <stdtype.h>
 #include <player/playera.hpp>
 #include "utils.hpp"
+#include "mediainfo.hpp"
 #include "mmkeys.hpp"
 #include "dbus.hpp"
 
@@ -66,8 +67,6 @@ typedef struct DBusMetadata_
 static UINT32 OldLoopCount;
 
 static std::string artpath; // Cached art path
-
-static mmkey_cbfunc evtCallback = NULL;
 
 static DBusConnection* connection = NULL;
 
@@ -389,7 +388,6 @@ static void DBusSendMetadata(DBusMessageIter* dict_root)
 	}
 
 	// Prepare metadata
-	PlayerBase* player = mInf->_player.GetPlayer();
 
 	// Album
 	const char* utf8album = mInf->GetSongTagForDisp("GAME");
@@ -459,7 +457,7 @@ static void DBusSendMetadata(DBusMessageIter* dict_root)
 	for (size_t curDev = 0; curDev < mInf->_chipList.size(); curDev ++)
 	{
 		const MediaInfo::DeviceItem& di = mInf->_chipList[curDev];
-		chipPtrs.push_back(di.name);
+		chipPtrs.push_back(di.name.c_str());
 	}
 	for (size_t curDev = 0; curDev < chipPtrs.size(); curDev ++)
 	{
@@ -513,7 +511,7 @@ static void DBusSendMetadata(DBusMessageIter* dict_root)
 		{ "vgm:system",         DBUS_TYPE_STRING_AS_STRING, &utf8system,    DBUS_TYPE_STRING,   0 },
 		{ "vgm:version",        DBUS_TYPE_UINT32_AS_STRING, &version,       DBUS_TYPE_UINT32,   0 },
 		{ "vgm:loop",           DBUS_TYPE_INT64_AS_STRING,  &loop,          DBUS_TYPE_INT64,    0 },
-		{ "vgm:chips",          "as",                       &chips,         DBUS_TYPE_ARRAY,    chipslen },
+		{ "vgm:chips",          "as",                       &chips,         DBUS_TYPE_ARRAY,    chips.size() },
 	};
 	DBusSendMetadataArray(dict_root, meta, sizeof(meta)/sizeof(*meta));
 }
@@ -1117,8 +1115,9 @@ static DBusHandlerResult DBusHandler(DBusConnection* connection, DBusMessage* me
 	}
 }
 
-UINT8 MultimediaKeyHook_Init(void)
+UINT8 MultimediaKeyHook_Init(MediaInfo& mediaInfo)
 {
+	mInf = &mediaInfo;
 	// Allocate memory for the art path cache
 	artpath.resize(MAX_PATH);
 
@@ -1150,11 +1149,6 @@ void MultimediaKeyHook_Deinit(void)
 	if(connection != NULL)
 		dbus_connection_unref(connection);
 	invalidateArtCache();
-}
-
-void MultimediaKeyHook_SetCallback(mmkey_cbfunc callbackFunc)
-{
-	evtCallback = callbackFunc;
 }
 
 void DBus_ReadWriteDispatch(void)
