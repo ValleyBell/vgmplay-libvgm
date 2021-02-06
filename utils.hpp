@@ -15,6 +15,7 @@ const char* GetFileExtension(const char* filePath);
 void StandardizeDirSeparators(std::string& filePath);
 bool IsAbsolutePath(const char* filePath);
 std::string CombinePaths(const std::string& basePath, const std::string& addPath);
+std::string GetAbsolutePath(const std::string& relPath);
 std::string FindFile_List(const std::vector<std::string>& fileList, const std::vector<std::string>& pathList);
 std::string FindFile_Single(const std::string& fileName, const std::vector<std::string>& pathList);
 std::string Vector2String(const std::vector<char>& data, size_t startPos = 0, size_t endPos = std::string::npos);

@@ -45,12 +45,6 @@ They weren't lying when they said that using libdbus directly signs you up for s
 
 //#define DBUS_DEBUG
 
-#ifdef DBUS_DEBUG
-#define ART_EXISTS_PRINTF(x)    printf("\nTrying %s\n", (x));
-#else
-#define ART_EXISTS_PRINTF(x)
-#endif
-
 // MPRIS Metadata Struct
 typedef struct DBusMetadata_
 {
@@ -71,18 +65,11 @@ typedef struct DBusMetadata_
 #define SIGNAL_VOLUME      0x20 // Volume needs to be updated
 #define SIGNAL_ALL         0xFF // All Signals
 
-static std::string artpath; // Cached art path
-
 static DBusConnection* connection = NULL;
 
 static MediaInfo* mInf;
 
 // Misc Helper Functions
-static inline void invalidateArtCache()
-{
-	artpath.clear();
-}
-
 
 // Return current position in samples
 static inline INT32 ReturnSamplePos(INT64 UsecPos, const PlayerA& player)
@@ -90,13 +77,11 @@ static inline INT32 ReturnSamplePos(INT64 UsecPos, const PlayerA& player)
 	return (INT32)((UsecPos / 1.0E+6) * (double)player.GetSampleRate());
 }
 
-static inline bool FileExists(const char* file)
+static std::string Path2FileURL(const std::string& path)
 {
-	FILE* fp = fopen(file, "rb");
-	if (fp == NULL)
-		return false;
-	fclose(fp);
-	return true;
+	if (path.empty())
+		return path;
+	return std::string("file://") + urlencode(GetAbsolutePath(path));
 }
 
 // DBus Helper Functions
@@ -271,118 +256,6 @@ static void DBusSendMetadataArray(DBusMessageIter* dict_root, DBusMetadata meta[
 	dbus_message_iter_close_container(dict_root, &root_variant);
 }
 
-static std::string getBasePath(const char** ls)
-{
-	std::string basepath;
-	std::string fullPath;
-
-	// Get the base path
-	// If the filename is absolute, then the base path is everything up to the last dir separator
-	// If relative, base path is cwd + everything before the last separator in the filename
-	if(!IsAbsolutePath(mInf->_songPath.c_str()))
-	{
-		// Add cwd to the base path if needed
-		// -1 so that there's enough room to append the trailing /
-
-		basepath.resize(MAX_PATH);
-		if(!getcwd(&basepath[0], basepath.size()))
-		{
-			// If getcwd fails, there's most likely no way to get the base path
-			return std::string();
-		}
-		basepath.resize(strlen(basepath.c_str()));
-		fullPath = CombinePaths(basepath, mInf->_songPath);
-
-#ifdef DBUS_DEBUG
-		puts("Relative path detected");
-#endif
-	}
-	else
-	{
-		fullPath = mInf->_songPath;
-	}
-	
-	const char* filePath = fullPath.c_str();
-	const char* fileTitle = GetFileTitle(filePath);
-	basepath = fullPath.substr(0, fileTitle - filePath);
-#ifdef DBUS_DEBUG
-	printf("\nBase Path %s\n", basepath.c_str());
-#endif
-
-	if (ls != NULL)
-	{
-		filePath = mInf->_songPath.c_str();
-		fileTitle = GetFileTitle(filePath);
-		*ls = (fileTitle == filePath) ? NULL : (fileTitle - 1);
-	}
-	return basepath;
-}
-
-static inline void getArtPath(const char* utf8album, std::string& basepath)
-{
-	basepath = getBasePath(NULL);
-
-	// Store a pointer to the end of the base path so that we can easily append to it, as well as the length of the base path
-	// No point trying to find the art if we couldn't get the base path
-	if(basepath.empty())
-		return;
-	size_t baselen_orig = basepath.length();
-
-	// Now that we have the base path, we start looking for art
-	// If we are reading a playlist, append everything after the separator to the path and replace its m3u extension with png
-	if(mInf->_playlistTrkID != (size_t)-1)
-	{
-		// Copy the whole string after the separator (if one exists), excluding the file extension
-		// Otherwise take the filename as-is
-		const char* filetitle = GetFileTitle(mInf->_playlistPath.c_str());
-		const char* fileext = GetFileExtension(filetitle);
-		if (fileext == NULL)
-			fileext = filetitle + strlen(filetitle) + 1;
-		else
-			fileext --; // make it point to the dot
-
-		basepath.resize(baselen_orig);
-		// Append the png extension
-		basepath += std::string(filetitle, fileext) + ".png";
-
-		ART_EXISTS_PRINTF(basepath.c_str())
-		if(FileExists(basepath.c_str()))
-			return;
-	}
-
-	// If we get here, we're probably in single track mode, or the playlist is named differently
-	// check base path + album + .png
-	basepath.resize(baselen_orig);
-	basepath += utf8album;
-	basepath += ".png";
-	ART_EXISTS_PRINTF(basepath.c_str())
-	if(FileExists(basepath.c_str()))
-		return;
-
-	// As a last resort, pick the first image glob can find in the base path
-	// Append the case insensitive extension to the base path
-	basepath.resize(baselen_orig);
-	basepath += "*.[pP][nN][gG]";
-
-#ifdef DBUS_DEBUG
-	printf("Using glob %s\n", basepath.c_str());
-#endif
-	glob_t result;
-	if(glob(basepath.c_str(), GLOB_NOSORT, NULL, &result) == 0)
-	{
-		if(result.gl_pathc > 0)
-		{
-			basepath = result.gl_pathv[0];
-			globfree(&result);
-			return;
-		}
-	}
-	globfree(&result);
-
-	// There's nothing else we can do. Return an empty string
-	basepath.clear();
-}
-
 static void DBusSendMetadata(DBusMessageIter* dict_root)
 {
 	// Send an empty array in a variant if nothing is playing
@@ -411,15 +284,9 @@ static void DBusSendMetadata(DBusMessageIter* dict_root)
 	if(mInf->_playlistTrkID != (size_t)-1)
 		tracknum = (int32_t)(1 + mInf->_playlistTrkID);
 
-	// Try to get the cover art url
-	getArtPath(utf8album, artpath);
-
-#ifdef DBUS_DEBUG
-	printf("\nFinal art path %s\n", artpath.c_str());
-#endif
-
 	// URL encode the path to the png
-	std::string arturlescaped = std::string("file://") + urlencode(artpath);
+	std::string artURL = Path2FileURL(mInf->_albumImgPath);
+	const char* arturl = artURL.c_str();
 
 	// Game release date
 	const char* utf8release = mInf->GetSongTagForDisp("DATE");
@@ -475,16 +342,8 @@ static void DBusSendMetadata(DBusMessageIter* dict_root)
 	}
 
 	// URL encoded Filename
-	// First get the base path, then append the last separator
-	const char* lastsep = NULL;
-	std::string pathurl = getBasePath(&lastsep);
-	// Skip the actual separator if it exists
-	if(lastsep && *lastsep != '\0')
-		lastsep++;
-	else
-		lastsep = mInf->_songPath.c_str();
-	pathurl += lastsep;
-	std::string url = std::string("file://") + urlencode(pathurl);
+	std::string songURL = Path2FileURL(mInf->_songPath);
+	const char* songurl = songURL.c_str();
 
 	// Stubs
 	const char* trackid = DBUS_MPRIS_PATH "/CurrentTrack";
@@ -496,8 +355,8 @@ static void DBusSendMetadata(DBusMessageIter* dict_root)
 	DBusMetadata meta[] =
 	{
 		{ "mpris:trackid",      DBUS_TYPE_STRING_AS_STRING, &trackid,       DBUS_TYPE_STRING,   0 },
-		{ "xesam:url",          DBUS_TYPE_STRING_AS_STRING, &url,           DBUS_TYPE_STRING,   0 },
-		{ "mpris:artUrl",       DBUS_TYPE_STRING_AS_STRING, &arturlescaped, DBUS_TYPE_STRING,   0 },
+		{ "xesam:url",          DBUS_TYPE_STRING_AS_STRING, &songurl,       DBUS_TYPE_STRING,   0 },
+		{ "mpris:artUrl",       DBUS_TYPE_STRING_AS_STRING, &arturl,        DBUS_TYPE_STRING,   0 },
 		{ "xesam:lastused",     DBUS_TYPE_STRING_AS_STRING, &lastused,      DBUS_TYPE_STRING,   0 },
 		{ "xesam:genre",        "as",                       &dbusgenre,     DBUS_TYPE_ARRAY,    1 },
 		{ "xesam:album",        DBUS_TYPE_STRING_AS_STRING, &utf8album,     DBUS_TYPE_STRING,   0 },
@@ -584,7 +443,6 @@ static void DBus_EmitSignal(UINT8 type)
 			// It is possible for the art to change if the playlist contains tracks from multiple games
 			// since art can be found by the "Game Name".png field
 			// Invalidate it on track change, as it will be populated later on demand
-			invalidateArtCache();
 			dbus_message_iter_open_container(&dict, DBUS_TYPE_DICT_ENTRY, NULL, &dict_entry);
 				const char* title = "Metadata";
 				dbus_message_iter_append_basic(&dict_entry, DBUS_TYPE_STRING, &title);
@@ -1112,8 +970,7 @@ static DBusHandlerResult DBusHandler(DBusConnection* connection, DBusMessage* me
 UINT8 MediaControl::Init(MediaInfo& mediaInfo)
 {
 	mInf = &mediaInfo;
-	// Allocate memory for the art path cache
-	artpath.resize(MAX_PATH);
+	mInf->_enableAlbumImage = true;
 
 	connection = dbus_bus_get(DBUS_BUS_SESSION, NULL);
 	if(!connection)
@@ -1144,7 +1001,6 @@ void MediaControl::Deinit(void)
 {
 	if(connection != NULL)
 		dbus_connection_unref(connection);
-	invalidateArtCache();
 }
 
 void MediaControl::ReadWriteDispatch(void)

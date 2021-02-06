@@ -7,6 +7,9 @@
 
 #ifdef _WIN32
 #include <Windows.h>	// for WriteConsoleW etc.
+#else
+#include <limits.h>		// for PATH_MAX
+#include <unistd.h>		// for getcwd()
 #endif
 
 #include "utils.hpp"
@@ -18,6 +21,7 @@ static const char* GetLastDirSeparator(const char* filePath);
 //void StandardizeDirSeparators(std::string& filePath);
 //bool IsAbsolutePath(const char* filePath);
 //std::string CombinePaths(const std::string& basePath, const std::string& addPath);
+//std::string GetAbsolutePath(const std::string& relPath);
 //std::string FindFile_List(const std::vector<std::string>& fileList, const std::vector<std::string>& pathList);
 //std::string FindFile_Single(const std::string& fileName, const std::vector<std::string>& pathList);
 //std::string Vector2String(const std::vector<char>& data, size_t startPos, size_t endPos);
@@ -90,6 +94,7 @@ bool IsAbsolutePath(const char* filePath)
 		return false;	// empty string
 	if (filePath[0] == '/' || filePath[0] == '\\')
 		return true;	// absolute UNIX path / device-relative Windows path
+#ifdef _WIN32
 	if (filePath[1] == ':')
 	{
 		if ((filePath[0] >= 'A' && filePath[0] <= 'Z') ||
@@ -98,6 +103,7 @@ bool IsAbsolutePath(const char* filePath)
 	}
 	if (! strncmp(filePath, "\\\\", 2))
 		return true;	// Windows network path: \\computername\path
+#endif
 	return false;
 }
 
@@ -110,6 +116,35 @@ std::string CombinePaths(const std::string& basePath, const std::string& addPath
 		return basePath + addPath;
 	else
 		return basePath + '/' + addPath;
+}
+
+std::string GetAbsolutePath(const std::string& relPath)
+{
+	if (relPath.empty() || IsAbsolutePath(relPath.c_str()))
+		return relPath;
+#ifdef _WIN32
+	DWORD numChrs = GetFullPathNameA(relPath.c_str(), 0, NULL, NULL);
+	std::string absPath(numChrs, '\0');
+	numChrs = GetFullPathNameA(relPath.c_str(), absPath.size(), &absPath[0], NULL);
+	absPath.resize(numChrs);
+	return absPath;
+#else
+	std::string absPath(PATH_MAX, '\0');
+	// char *realpath(const char *path, char *resolved_path);
+	const char* ret = realpath(relPath.c_str(), &absPath[0]);
+	if (ret != NULL)
+	{
+		absPath.resize(strlen(absPath.c_str()));
+		return absPath;
+	}
+	// The file doesn't exist - fall back to "manual" path concatenation with the working directory.
+	//absPath.resize(PATH_MAX);
+	ret = getcwd(&absPath[0], absPath.size());
+	if (ret == NULL)
+		return relPath;	// failed to get path - just return the original one
+	absPath.resize(strlen(absPath.c_str()));
+	return CombinePaths(absPath, relPath);
+#endif
 }
 
 std::string FindFile_List(const std::vector<std::string>& fileList, const std::vector<std::string>& pathList)

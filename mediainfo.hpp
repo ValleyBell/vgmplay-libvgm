@@ -42,6 +42,7 @@ public:
 	const char* GetSongTagForDisp(const std::string& tagName);
 	void EnumerateTags(void);	// implicitly called by PreparePlayback(), as that one may parse some of the tags
 	void EnumerateChips(void);	// must be called after starting playback in order to retrieve used sound core IDs
+	void SearchAlbumImage(void);
 	
 	void AddSignalCallback(MI_SIGNAL_CB func, void* param);
 	void Event(UINT8 evtType, INT32 evtParam);
@@ -87,9 +88,11 @@ public:
 	std::string _playlistPath;
 	size_t _playlistTrkID;	// (size_t)-1 when not in a playlist
 	size_t _playlistTrkCnt;
+	std::string _albumImgPath;
 	
 	std::vector<SignalHandler> _sigCb;
 	std::queue<EventData> _evtQueue;
+	bool _enableAlbumImage = false;
 };
 
 #endif	// __MEDIAINFO_HPP__

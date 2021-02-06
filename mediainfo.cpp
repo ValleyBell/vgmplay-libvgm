@@ -2,6 +2,11 @@
 #include <vector>
 #include <map>
 #include <cmath>
+#ifdef _WIN32
+#include <windows.h>
+#else
+#include <glob.h>
+#endif
 
 #include <stdtype.h>
 #include <player/playerbase.hpp>
@@ -12,7 +17,10 @@
 #include <emu/SoundDevs.h>
 #include <emu/SoundEmu.h>	// for SndEmu_GetDevName()
 
+#include "utils.hpp"
 #include "mediainfo.hpp"
+
+//#define DEBUG_ART_SEARCH	1
 
 static void Tags_LangFilter(std::map<std::string, std::string>& tags, const std::string& tagName,
 	const std::vector<std::string>& langPostfixes, int defaultLang);
@@ -191,6 +199,98 @@ void MediaInfo::EnumerateChips(void)
 		_chipList.push_back(dItm);
 	}
 	
+	return;
+}
+
+static inline bool FileExists(const char* file)
+{
+	FILE* fp = fopen(file, "rb");
+	if (fp == NULL)
+		return false;
+	fclose(fp);
+	return true;
+}
+
+void MediaInfo::SearchAlbumImage(void)
+{
+	if (! _enableAlbumImage)
+		return;
+	
+	// Thanks to Tasos Sahanidis for the art search algorithm.
+#if DEBUG_ART_SEARCH
+	printf("Starting art search.\n");
+#endif
+	
+	_albumImgPath.clear();
+	if (_playlistTrkID != (size_t)-1)
+	{
+		// for "abc/d/playlist.m3u", try "abc/d/playlist.png"
+		const char* fileExt = GetFileExtension(_playlistPath.c_str());
+		size_t dotPos = (fileExt != NULL) ? (fileExt - 1 - _playlistPath.c_str()) : _playlistPath.size();
+		std::string imgPath = _playlistPath.substr(0, dotPos) + ".png";
+#if DEBUG_ART_SEARCH
+		printf("Trying %s\n", imgPath.c_str());
+#endif
+		if (FileExists(imgPath.c_str()))
+		{
+			_albumImgPath = imgPath;
+			return;
+		}
+	}
+	
+	std::string basePath;
+	{
+		const char* filePath = _songPath.c_str();
+		const char* fileTitle = GetFileTitle(filePath);
+		basePath = _songPath.substr(0, fileTitle - filePath);
+	}
+	
+	// If we get here, we're probably in single track mode, or the playlist is named differently.
+	// So we check [base path] + [album] + ".png"
+	const char* albumName = GetSongTagForDisp("GAME");
+	if (albumName[0] != '\0')
+	{
+		std::string imgPath = basePath + albumName + ".png";
+#if DEBUG_ART_SEARCH
+		printf("Trying %s\n", imgPath.c_str());
+#endif
+		if (FileExists(imgPath.c_str()))
+		{
+			_albumImgPath = imgPath;
+			return;
+		}
+	}
+	
+	// As a last resort, pick the first image glob can find in the base path.
+	// Append the case insensitive extension to the base path.
+#ifdef _WIN32
+	{
+		// TODO (use FindFirstFile)
+	}
+#else
+	{
+		std::string pathPattern = basePath + "*.[pP][nN][gG]";
+#if DEBUG_ART_SEARCH
+		printf("Using glob %s\n", pathPattern.c_str());
+#endif
+		glob_t result;
+		int ret = glob(pathPattern.c_str(), GLOB_NOSORT, NULL, &result);
+		if (ret == 0)
+		{
+			if (result.gl_pathc > 0)
+			{
+				_albumImgPath = result.gl_pathv[0];
+				globfree(&result);
+				return;
+			}
+		}
+		globfree(&result);
+	}
+#endif
+	
+#if DEBUG_ART_SEARCH
+	printf("Art search failed.\n");
+#endif
 	return;
 }
 

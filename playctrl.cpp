@@ -264,6 +264,7 @@ UINT8 PlayerMain(UINT8 showFileName)
 		mediaInfo._fileEndPos = myPlayer.GetFileSize();
 		mediaInfo.PreparePlayback();
 		PreparePlayback();
+		mediaInfo.SearchAlbumImage();
 		
 		// call "start" before showing song info, so that we can get the sound cores
 		myPlayer.Start();
