@@ -55,7 +55,7 @@ typedef struct DBusMetadata_
 
 static DBusConnection* connection = NULL;
 
-static MediaInfo* mInf;
+static MediaInfo* mInf = NULL;
 
 // Misc Helper Functions
 

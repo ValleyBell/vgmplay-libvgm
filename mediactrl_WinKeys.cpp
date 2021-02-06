@@ -2,8 +2,8 @@
 #include <stdio.h>
 
 #include <stdtype.h>
-#include "mmkeys.hpp"
 #include "mediainfo.hpp"
+#include "mediactrl.hpp"
 
 #ifndef VK_MEDIA_NEXT_TRACK
 // from WinUser.h
@@ -35,7 +35,7 @@ static UINT8 HandleMediaKeyPress(int evtCode)
 		mInf->Event(MI_EVT_PLIST, MIE_PL_NEXT);
 		break;
 	}
-
+	
 	return 1;
 }
 
@@ -74,6 +74,7 @@ UINT8 MediaControl::Init(MediaInfo& mediaInfo)
 		return 0x01;
 	
 	mInf = &mediaInfo;
+	mInf->_enableAlbumImage = false;
 	hEvent = CreateEvent(NULL, FALSE, FALSE, NULL);
 	hThread = CreateThread(NULL, 0x00, KeyMessageThread, NULL, 0x00, &idThread);
 	if (hThread == NULL)

@@ -265,7 +265,20 @@ void MediaInfo::SearchAlbumImage(void)
 	// Append the case insensitive extension to the base path.
 #ifdef _WIN32
 	{
-		// TODO (use FindFirstFile)
+		// TODO: Use Unicode calls when possible.
+		//       Right now this goes very wrong with non-ASCII characters.
+		std::string pathPattern = basePath + "*.png";
+#if DEBUG_ART_SEARCH
+		printf("Using file search %s\n", pathPattern.c_str());
+#endif
+		WIN32_FIND_DATAA ffd;
+		HANDLE hFind = FindFirstFileA(pathPattern.c_str(), &ffd);
+		if (hFind != INVALID_HANDLE_VALUE)
+		{
+			_albumImgPath = CombinePaths(basePath, ffd.cFileName);
+			FindClose(hFind);
+			return;
+		}
 	}
 #else
 	{
