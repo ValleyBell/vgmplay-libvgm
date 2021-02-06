@@ -12,20 +12,10 @@ They weren't lying when they said that using libdbus directly signs you up for s
 #define _GNU_SOURCE
 #endif
 #include <stdio.h>
-#include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
 #include <string>
 #include <vector>
-#include <map>
-#include <sys/types.h>
-#include <unistd.h>
-#include <stdbool.h>
-#include <errno.h>
-#include <locale.h>
-#include <wchar.h>
-#include <limits.h>
-#include <glob.h>
 #include <dbus/dbus.h>
 
 #include <stdtype.h>
@@ -33,8 +23,6 @@ They weren't lying when they said that using libdbus directly signs you up for s
 #include "utils.hpp"
 #include "mediainfo.hpp"
 #include "mediactrl.hpp"
-
-#define MAX_PATH PATH_MAX
 
 // DBus MPRIS Constants
 #define DBUS_MPRIS_PATH             "/org/mpris/MediaPlayer2"
@@ -72,9 +60,14 @@ static MediaInfo* mInf;
 // Misc Helper Functions
 
 // Return current position in samples
-static inline INT32 ReturnSamplePos(INT64 UsecPos, const PlayerA& player)
+static inline INT32 USec2Samples(dbus_int64_t UsecPos, const PlayerA& player)
 {
 	return (INT32)((UsecPos / 1.0E+6) * (double)player.GetSampleRate());
+}
+
+static inline dbus_int64_t Time2USec(double time)
+{
+	return (dbus_int64_t)(time * 1.0E+6);
 }
 
 static std::string Path2FileURL(const std::string& path)
@@ -266,51 +259,33 @@ static void DBusSendMetadata(DBusMessageIter* dict_root)
 	}
 
 	// Prepare metadata
-
-	// Album
-	const char* utf8album = mInf->GetSongTagForDisp("GAME");
-
-	// Title
-	const char* utf8title = mInf->GetSongTagForDisp("TITLE");
-
-	// Length
-	INT64 len64 = (INT64)(mInf->_player.GetTotalTime(1) * 1.0E+6);
-
-	// Artist
-	const char* utf8artist = mInf->GetSongTagForDisp("ARTIST");
+	const char* utf8album = mInf->GetSongTagForDisp("GAME"); // Album
+	const char* utf8title = mInf->GetSongTagForDisp("TITLE"); // Title
+	dbus_int64_t songlen = Time2USec(mInf->_player.GetTotalTime(1)); // Length
+	dbus_int64_t looplen = Time2USec(mInf->_player.GetLoopTime()); // Loop point
+	dbus_uint32_t version = mInf->_fileVerNum; // VGM File version
+	const char* utf8artist = mInf->GetSongTagForDisp("ARTIST"); // Artist
+	const char* utf8release = mInf->GetSongTagForDisp("DATE"); // Game release date
+	const char* utf8creator = mInf->GetSongTagForDisp("ENCODED_BY"); // VGM File Creator
+	const char* utf8notes = mInf->GetSongTagForDisp("COMMENT"); // Notes
+	const char* utf8system = mInf->GetSongTagForDisp("SYSTEM"); // System
 
 	// Track Number in playlist
-	int32_t tracknum = 0;
+	dbus_int32_t tracknum = 0;
 	if(mInf->_playlistTrkID != (size_t)-1)
-		tracknum = (int32_t)(1 + mInf->_playlistTrkID);
+		tracknum = (dbus_int32_t)(1 + mInf->_playlistTrkID);
+
+	// URL encoded file path
+	std::string songURL = Path2FileURL(mInf->_songPath);
+	const char* songurl = songURL.c_str();
 
 	// URL encode the path to the png
 	std::string artURL = Path2FileURL(mInf->_albumImgPath);
 	const char* arturl = artURL.c_str();
 
-	// Game release date
-	const char* utf8release = mInf->GetSongTagForDisp("DATE");
-
-	// VGM File Creator
-	const char* utf8creator = mInf->GetSongTagForDisp("ENCODED_BY");
-
-	// Notes
-	const char* utf8notes = mInf->GetSongTagForDisp("COMMENT");
-
-	// System
-	const char* utf8system = mInf->GetSongTagForDisp("SYSTEM");
-
-	// VGM File version
-	uint32_t version = mInf->_fileVerNum;
-
-	// Loop point
-	INT64 loop = (INT64)(mInf->_player.GetLoopTime() * 1.0E+6);
-
-	if(utf8artist[0] == '\0')
-		utf8artist = utf8album;
-
 	// Encapsulate some data in DBusMetadata Arrays
 	// Artist Array
+	// TODO: split artists at , and ; and &
 	DBusMetadata dbusartist[1] =
 	{
 		{ "", DBUS_TYPE_STRING_AS_STRING, &utf8artist, DBUS_TYPE_STRING, 0 },
@@ -323,9 +298,9 @@ static void DBusSendMetadata(DBusMessageIter* dict_root)
 		{ "", DBUS_TYPE_STRING_AS_STRING, &genre, DBUS_TYPE_STRING, 0 },
 	};
 
+	// Generate chips array
 	std::vector<DBusMetadata> chips;
 	std::vector<const char*> chipPtrs;
-	// Generate chips array
 	for (size_t curDev = 0; curDev < mInf->_chipList.size(); curDev ++)
 	{
 		const MediaInfo::DeviceItem& di = mInf->_chipList[curDev];
@@ -341,40 +316,36 @@ static void DBusSendMetadata(DBusMessageIter* dict_root)
 		chips.push_back(cm);
 	}
 
-	// URL encoded Filename
-	std::string songURL = Path2FileURL(mInf->_songPath);
-	const char* songurl = songURL.c_str();
-
 	// Stubs
 	const char* trackid = DBUS_MPRIS_PATH "/CurrentTrack";
-	const char* lastused = "2018-01-04T12:21:32Z";
-	int32_t discnum = 1;
-	int32_t usecnt = 0;
-	double userrating = 0;
+	//const char* lastused = "2018-01-04T12:21:32Z";
+	//dbus_int32_t discnum = 1;
+	//dbus_int32_t usecnt = 0;
+	//double userrating = 0;
 
 	DBusMetadata meta[] =
 	{
 		{ "mpris:trackid",      DBUS_TYPE_STRING_AS_STRING, &trackid,       DBUS_TYPE_STRING,   0 },
 		{ "xesam:url",          DBUS_TYPE_STRING_AS_STRING, &songurl,       DBUS_TYPE_STRING,   0 },
 		{ "mpris:artUrl",       DBUS_TYPE_STRING_AS_STRING, &arturl,        DBUS_TYPE_STRING,   0 },
-		{ "xesam:lastused",     DBUS_TYPE_STRING_AS_STRING, &lastused,      DBUS_TYPE_STRING,   0 },
+	//	{ "xesam:lastused",     DBUS_TYPE_STRING_AS_STRING, &lastused,      DBUS_TYPE_STRING,   0 },
 		{ "xesam:genre",        "as",                       &dbusgenre,     DBUS_TYPE_ARRAY,    1 },
 		{ "xesam:album",        DBUS_TYPE_STRING_AS_STRING, &utf8album,     DBUS_TYPE_STRING,   0 },
 		{ "xesam:title",        DBUS_TYPE_STRING_AS_STRING, &utf8title,     DBUS_TYPE_STRING,   0 },
-		{ "mpris:length",       DBUS_TYPE_INT64_AS_STRING,  &len64,         DBUS_TYPE_INT64,    0 },
+		{ "mpris:length",       DBUS_TYPE_INT64_AS_STRING,  &songlen,       DBUS_TYPE_INT64,    0 },
 		{ "xesam:artist",       "as",                       &dbusartist,    DBUS_TYPE_ARRAY,    1 },
 		{ "xesam:composer",     "as",                       &dbusartist,    DBUS_TYPE_ARRAY,    1 },
 		{ "xesam:trackNumber",  DBUS_TYPE_INT32_AS_STRING,  &tracknum,      DBUS_TYPE_INT32,    1 },
-		{ "xesam:discNumber",   DBUS_TYPE_INT32_AS_STRING,  &discnum,       DBUS_TYPE_INT32,    1 },
-		{ "xesam:useCount",     DBUS_TYPE_INT32_AS_STRING,  &usecnt,        DBUS_TYPE_INT32,    1 },
-		{ "xesam:userRating",   DBUS_TYPE_DOUBLE_AS_STRING, &userrating,    DBUS_TYPE_DOUBLE,   1 },
+	//	{ "xesam:discNumber",   DBUS_TYPE_INT32_AS_STRING,  &discnum,       DBUS_TYPE_INT32,    1 },
+	//	{ "xesam:useCount",     DBUS_TYPE_INT32_AS_STRING,  &usecnt,        DBUS_TYPE_INT32,    1 },
+	//	{ "xesam:userRating",   DBUS_TYPE_DOUBLE_AS_STRING, &userrating,    DBUS_TYPE_DOUBLE,   1 },
 		// Extra non-xesam/mpris entries
 		{ "vgm:release",        DBUS_TYPE_STRING_AS_STRING, &utf8release,   DBUS_TYPE_STRING,   0 },
 		{ "vgm:creator",        DBUS_TYPE_STRING_AS_STRING, &utf8creator,   DBUS_TYPE_STRING,   0 },
 		{ "vgm:notes",          DBUS_TYPE_STRING_AS_STRING, &utf8notes,     DBUS_TYPE_STRING,   0 },
 		{ "vgm:system",         DBUS_TYPE_STRING_AS_STRING, &utf8system,    DBUS_TYPE_STRING,   0 },
 		{ "vgm:version",        DBUS_TYPE_UINT32_AS_STRING, &version,       DBUS_TYPE_UINT32,   0 },
-		{ "vgm:loop",           DBUS_TYPE_INT64_AS_STRING,  &loop,          DBUS_TYPE_INT64,    0 },
+		{ "vgm:loop",           DBUS_TYPE_INT64_AS_STRING,  &looplen,       DBUS_TYPE_INT64,    0 },
 		{ "vgm:chips",          "as",                       &chips[0],      DBUS_TYPE_ARRAY,    chips.size() },
 	};
 	DBusSendMetadataArray(dict_root, meta, sizeof(meta)/sizeof(*meta));
@@ -415,7 +386,7 @@ static void DBus_EmitSignal(UINT8 type)
 		msg = dbus_message_new_signal(DBUS_MPRIS_PATH, DBUS_MPRIS_PLAYER, "Seeked");
 
 		dbus_message_iter_init_append(msg, &args);
-		INT64 response = (INT64)(mInf->_player.GetCurTime(1) * 1.0E+6);
+		dbus_int64_t response = Time2USec(mInf->_player.GetCurTime(1));
 		dbus_message_iter_append_basic(&args, DBUS_TYPE_INT64, &response);
 
 		dbus_connection_send(connection, msg, NULL);
@@ -476,7 +447,7 @@ static void DBus_EmitSignal(UINT8 type)
 			dbus_message_iter_open_container(&dict, DBUS_TYPE_DICT_ENTRY, NULL, &dict_entry);
 				const char* playing = "Position";
 				dbus_message_iter_append_basic(&dict_entry, DBUS_TYPE_STRING, &playing);
-				INT64 response = (INT64)(mInf->_player.GetCurTime(1) * 1.0E+6);
+				dbus_int64_t response = Time2USec(mInf->_player.GetCurTime(1));
 				DBusReplyWithVariant(&dict_entry, DBUS_TYPE_INT64, DBUS_TYPE_INT64_AS_STRING, &response);
 			dbus_message_iter_close_container(&dict, &dict_entry);
 		}
@@ -655,7 +626,7 @@ static DBusHandlerResult DBusHandler(DBusConnection* connection, DBusMessage* me
 			}
 			else if(!strcmp(method_property_arg, "Position"))
 			{
-				INT64 response = (INT64)(mInf->_player.GetCurTime(1) * 1.0E+6);
+				dbus_int64_t response = Time2USec(mInf->_player.GetCurTime(1));
 				DBusReplyWithVariant(&args, DBUS_TYPE_INT64, DBUS_TYPE_INT64_AS_STRING, &response);
 			}
 			//Dummy volume
@@ -863,7 +834,7 @@ static DBusHandlerResult DBusHandler(DBusConnection* connection, DBusMessage* me
 					// Field Title
 					title = "Position";
 					dbus_message_iter_append_basic(&dict_entry, DBUS_TYPE_STRING, &title);
-					INT64 position = (INT64)(mInf->_player.GetCurTime(1) * 1.0E+6);
+					dbus_int64_t position = Time2USec(mInf->_player.GetCurTime(1));
 					DBusReplyWithVariant(&dict_entry, DBUS_TYPE_INT64, DBUS_TYPE_INT64_AS_STRING, &position);
 				dbus_message_iter_close_container(&dict, &dict_entry);
 
@@ -892,7 +863,7 @@ static DBusHandlerResult DBusHandler(DBusConnection* connection, DBusMessage* me
 	}
 	else if(dbus_message_is_method_call(message, DBUS_MPRIS_PLAYER, "Seek"))
 	{
-		INT64 offset = 0;
+		dbus_int64_t offset = 0;
 		if(!dbus_message_get_args(message, NULL, DBUS_TYPE_INT64, &offset, DBUS_TYPE_INVALID))
 			return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
 
@@ -900,7 +871,7 @@ static DBusHandlerResult DBusHandler(DBusConnection* connection, DBusMessage* me
 #ifdef DBUS_DEBUG
 		printf("Seek called with %lld\n", (long long)offset);
 #endif
-		mInf->Event(MI_EVT_SEEK_REL, ReturnSamplePos(offset, mInf->_player));
+		mInf->Event(MI_EVT_SEEK_REL, USec2Samples(offset, mInf->_player));
 		// the "seeked" signal will be emitted automatically by the player
 		return DBUS_HANDLER_RESULT_HANDLED;
 	}
@@ -942,13 +913,13 @@ static DBusHandlerResult DBusHandler(DBusConnection* connection, DBusMessage* me
 	}
 	else if(dbus_message_is_method_call(message, DBUS_MPRIS_PLAYER, "SetPosition"))
 	{
-		INT64 pos;
+		dbus_int64_t pos;
 		const char* path;
 		if(!dbus_message_get_args(message, NULL, DBUS_TYPE_OBJECT_PATH, &path, DBUS_TYPE_INT64, &pos, DBUS_TYPE_INVALID))
 			return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
 
 		DBusEmptyMethodResponse(connection, message);
-		mInf->Event(MI_EVT_SEEK_ABS, ReturnSamplePos(pos, mInf->_player));
+		mInf->Event(MI_EVT_SEEK_ABS, USec2Samples(pos, mInf->_player));
 		// the "seeked" signal will be emitted automatically by the player
 		return DBUS_HANDLER_RESULT_HANDLED;
 	}
