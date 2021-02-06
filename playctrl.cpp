@@ -23,7 +23,6 @@ extern "C" int __cdecl _kbhit(void);
 #endif
 
 #include <stdtype.h>
-#include <common_def.h>	// for INLINE
 #include <utils/DataLoader.h>
 #include <utils/FileLoader.h>
 #include <player/playerbase.hpp>
@@ -42,8 +41,7 @@ extern "C" int __cdecl _kbhit(void);
 #include "playcfg.hpp"
 #include "mediainfo.hpp"
 #include "version.h"
-#include "mmkeys.hpp"
-#include "dbus.hpp"
+#include "mediactrl.hpp"
 
 
 struct AudioDriver
@@ -129,11 +127,11 @@ extern std::vector<PlaylistFileList> plList;
 
 static int controlVal;
 static size_t curSong;
-static UINT8 lastMMEvent = 0x00;
 
 static MediaInfo mediaInfo;
+static MediaControl mediaCtrl;
 
-INLINE UINT32 MSec2Samples(UINT32 val, const PlayerA& player)
+static inline UINT32 MSec2Samples(UINT32 val, const PlayerA& player)
 {
 	return (UINT32)(((UINT64)val * player.GetSampleRate() + 500) / 1000);
 }
@@ -191,8 +189,8 @@ UINT8 PlayerMain(UINT8 showFileName)
 	}
 	mediaInfo._pbSongCnt = songList.size();
 	
-	MultimediaKeyHook_Init(mediaInfo);
-	DBus_Init(mediaInfo);
+	//mediaInfo.AddSignalCallback(SignalCB, NULL);
+	mediaCtrl.Init(mediaInfo);
 	
 #ifndef _WIN32
 	changemode(1);
@@ -282,13 +280,14 @@ UINT8 PlayerMain(UINT8 showFileName)
 		retVal = StartDiskWriter(sfl.fileName);
 		if (retVal)
 			fprintf(stderr, "Warning: File writer failed with error 0x%02X\n", retVal);
-		DBus_EmitSignal(SIGNAL_SEEK | SIGNAL_METADATA | SIGNAL_PLAYSTATUS | SIGNAL_CONTROLS);
+		
+		mediaInfo.Signal(MI_SIG_NEW_SONG);
 		PlayFile();
 		StopDiskWriter();
 		
 		mediaInfo._playState &= ~PLAYSTATE_PLAY;
 		myPlayer.Stop();
-		DBus_EmitSignal(SIGNAL_PLAYSTATUS | SIGNAL_CONTROLS);
+		mediaInfo.Signal(MI_SIG_PLAY_STATE);
 		
 		myPlayer.UnloadFile();
 		DataLoader_Deinit(dLoad);
@@ -299,7 +298,7 @@ UINT8 PlayerMain(UINT8 showFileName)
 #ifndef _WIN32
 	changemode(0);
 #endif
-	MultimediaKeyHook_Deinit();
+	mediaCtrl.Deinit();
 	
 	myPlayer.UnregisterAllPlayers();
 	
@@ -576,7 +575,7 @@ static UINT8 PlayFile(void)
 			Sleep(50);
 		}
 		
-		DBus_ReadWriteDispatch();
+		mediaCtrl.ReadWriteDispatch();
 		HandleKeyPress(false);
 		retVal = 0x00;
 		if (! mediaInfo._evtQueue.empty())	// TODO: thread-safety
@@ -669,7 +668,7 @@ static UINT8 HandleCtrlEvent(UINT8 evtType, INT32 evtParam)
 			OSMutex_Lock(renderMtx);
 			myPlayer.Reset();
 			OSMutex_Unlock(renderMtx);
-			DBus_EmitSignal(SIGNAL_SEEK);
+			mediaInfo.Signal(MI_SIG_POSITION);
 			return 0x01;
 		}
 		break;
@@ -699,7 +698,7 @@ static UINT8 HandleCtrlEvent(UINT8 evtType, INT32 evtParam)
 			else
 				AudioDrv_Resume(adOut.data);
 		}
-		DBus_EmitSignal(SIGNAL_PLAYSTATUS); // Emit status change signal
+		mediaInfo.Signal(MI_SIG_PLAY_STATE);
 		return 0x01;
 	case MI_EVT_FADE:	// fade out
 		if (! (mediaInfo._playState & PLAYSTATE_PLAY))
@@ -723,7 +722,7 @@ static UINT8 HandleCtrlEvent(UINT8 evtType, INT32 evtParam)
 			mediaInfo._player.Seek(PLAYPOS_SAMPLE, destPos);
 		}
 		OSMutex_Unlock(renderMtx);
-		DBus_EmitSignal(SIGNAL_SEEK);
+		mediaInfo.Signal(MI_SIG_POSITION);
 		return 0x01;
 	case MI_EVT_SEEK_ABS:
 		if (! (mediaInfo._playState & PLAYSTATE_PLAY))
@@ -731,7 +730,7 @@ static UINT8 HandleCtrlEvent(UINT8 evtType, INT32 evtParam)
 		OSMutex_Lock(renderMtx);
 		mediaInfo._player.Seek(PLAYPOS_SAMPLE, (UINT32)evtParam);
 		OSMutex_Unlock(renderMtx);
-		DBus_EmitSignal(SIGNAL_SEEK);
+		mediaInfo.Signal(MI_SIG_POSITION);
 		return 0x01;
 	case MI_EVT_SEEK_PERC:
 		if (! (mediaInfo._playState & PLAYSTATE_PLAY))
@@ -747,7 +746,7 @@ static UINT8 HandleCtrlEvent(UINT8 evtType, INT32 evtParam)
 			destPos = maxPos * evtParam / 100;
 			myPlayer.Seek(PLAYPOS_TICK, destPos);
 			OSMutex_Unlock(renderMtx);
-			DBus_EmitSignal(SIGNAL_SEEK);
+			mediaInfo.Signal(MI_SIG_POSITION);
 		}
 		return 0x01;
 	}

@@ -68,7 +68,7 @@ static DWORD WINAPI KeyMessageThread(void* args)
 	return 0;
 }
 
-UINT8 MultimediaKeyHook_Init(MediaInfo& mediaInfo)
+UINT8 MediaControl::Init(MediaInfo& mediaInfo)
 {
 	if (hThread != NULL)
 		return 0x01;
@@ -84,7 +84,7 @@ UINT8 MultimediaKeyHook_Init(MediaInfo& mediaInfo)
 	return 0x00;
 }
 
-void MultimediaKeyHook_Deinit(void)
+void MediaControl::Deinit(void)
 {
 	if (hThread == NULL)
 		return;
@@ -95,5 +95,22 @@ void MultimediaKeyHook_Deinit(void)
 	CloseHandle(hThread);
 	hThread = NULL;
 	
+	return;
+}
+
+void MediaControl::ReadWriteDispatch(void)
+{
+	return;
+}
+
+/*static*/ void MediaControl::SignalCB(MediaInfo* mInfo, void* userParam, UINT8 signalMask)
+{
+	MediaControl* obj = static_cast<MediaControl*>(userParam);
+	obj->SignalHandler(signalMask);
+	return;
+}
+
+void MediaControl::SignalHandler(UINT8 signalMask)
+{
 	return;
 }

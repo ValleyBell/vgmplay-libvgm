@@ -356,7 +356,7 @@ std::string urlencode(const std::string& str)
 		// http://www.blooberry.com/indexdot/html/topics/urlencoding.htm
 		unsigned char c = (unsigned char)str[i];
 		
-		bool doEscape = (c < 0x80);
+		bool doEscape = (c >= 0x80);
 		if (! doEscape)
 			doEscape = ! isprint(c) || (strchr(UNSAFE_CHRS, c) != NULL);
 		

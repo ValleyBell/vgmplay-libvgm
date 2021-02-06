@@ -128,17 +128,17 @@ set(PLAYER_FILES
 set(PLAYER_LIBS)
 
 # media control
-list(APPEND PLAYER_HEADERS mmkeys.hpp dbus.hpp)
+list(APPEND PLAYER_HEADERS mediactrl.hpp)
 if(MEDIA_CONTROLS STREQUAL "WIN_KEYS")
-	list(APPEND PLAYER_FILES mmkeys_Win.cpp dbus_stub.cpp)
+	list(APPEND PLAYER_FILES mediactrl_WinKeys.cpp)
 elseif(MEDIA_CONTROLS STREQUAL "DBUS")
 	if (NOT DBus1_FOUND)	# don't import again if already found - the module doesn't like this
 		find_package(DBus1 REQUIRED)
 	endif()
-	list(APPEND PLAYER_FILES dbus.cpp)
+	list(APPEND PLAYER_FILES mediactrl_dbus.cpp)
 	list(APPEND PLAYER_LIBS dbus-1)
 else()
-	list(APPEND PLAYER_FILES mmkeys_stub.cpp dbus_stub.cpp)
+	list(APPEND PLAYER_FILES mediactrl_stub.cpp)
 endif()
 
 add_executable(${PROJECT_NAME} ${HEADERS} ${SOURCES} ${PLAYER_HEADERS} ${PLAYER_FILES})

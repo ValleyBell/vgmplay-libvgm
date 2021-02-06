@@ -32,8 +32,7 @@ They weren't lying when they said that using libdbus directly signs you up for s
 #include <player/playera.hpp>
 #include "utils.hpp"
 #include "mediainfo.hpp"
-#include "mmkeys.hpp"
-#include "dbus.hpp"
+#include "mediactrl.hpp"
 
 #define MAX_PATH PATH_MAX
 
@@ -62,6 +61,15 @@ typedef struct DBusMetadata_
 	size_t childLen;
 } DBusMetadata;
 
+
+// Defines for the DBUS Signal handler
+#define SIGNAL_METADATA    0x01 // Metadata changed
+#define SIGNAL_PLAYSTATUS  0x02 // Playback Status Changed
+#define SIGNAL_SEEKSTATUS  0x04 // Seek Status Changed
+#define SIGNAL_SEEK        0x08 // Seeked
+#define SIGNAL_CONTROLS    0x10 // Playback controls need to be updated (CanGoNext/Previous)
+#define SIGNAL_VOLUME      0x20 // Volume needs to be updated
+#define SIGNAL_ALL         0xFF // All Signals
 
 // Needed for loop detection
 static UINT32 OldLoopCount;
@@ -511,7 +519,7 @@ static void DBusSendMetadata(DBusMessageIter* dict_root)
 		{ "vgm:system",         DBUS_TYPE_STRING_AS_STRING, &utf8system,    DBUS_TYPE_STRING,   0 },
 		{ "vgm:version",        DBUS_TYPE_UINT32_AS_STRING, &version,       DBUS_TYPE_UINT32,   0 },
 		{ "vgm:loop",           DBUS_TYPE_INT64_AS_STRING,  &loop,          DBUS_TYPE_INT64,    0 },
-		{ "vgm:chips",          "as",                       &chips,         DBUS_TYPE_ARRAY,    chips.size() },
+		{ "vgm:chips",          "as",                       &chips[0],      DBUS_TYPE_ARRAY,    chips.size() },
 	};
 	DBusSendMetadataArray(dict_root, meta, sizeof(meta)/sizeof(*meta));
 }
@@ -530,7 +538,7 @@ static void DBusSendPlaybackStatus(DBusMessageIter* args)
 	DBusReplyWithVariant(args, DBUS_TYPE_STRING, DBUS_TYPE_STRING_AS_STRING, &response);
 }
 
-void DBus_EmitSignal(UINT8 type)
+static void DBus_EmitSignal(UINT8 type)
 {
 #ifdef DBUS_DEBUG
 	printf("Emitting signal type 0x%x\n", type);
@@ -1115,7 +1123,7 @@ static DBusHandlerResult DBusHandler(DBusConnection* connection, DBusMessage* me
 	}
 }
 
-UINT8 MultimediaKeyHook_Init(MediaInfo& mediaInfo)
+UINT8 MediaControl::Init(MediaInfo& mediaInfo)
 {
 	mInf = &mediaInfo;
 	// Allocate memory for the art path cache
@@ -1140,18 +1148,20 @@ UINT8 MultimediaKeyHook_Init(MediaInfo& mediaInfo)
 	};
 
 	dbus_connection_try_register_object_path(connection, DBUS_MPRIS_PATH, &vtable, NULL, NULL);
+	
+	mInf->AddSignalCallback(&MediaControl::SignalCB, this);
 
 	return 0x00;
 }
 
-void MultimediaKeyHook_Deinit(void)
+void MediaControl::Deinit(void)
 {
 	if(connection != NULL)
 		dbus_connection_unref(connection);
 	invalidateArtCache();
 }
 
-void DBus_ReadWriteDispatch(void)
+void MediaControl::ReadWriteDispatch(void)
 {
 	if(connection == NULL)
 		return;
@@ -1172,8 +1182,24 @@ void DBus_ReadWriteDispatch(void)
 	dbus_connection_read_write_dispatch(connection, 1);
 }
 
-void DBus_Init(MediaInfo& mediaInfo)
+/*static*/ void MediaControl::SignalCB(MediaInfo* mInfo, void* userParam, UINT8 signalMask)
 {
-	mInf = &mediaInfo;
+	MediaControl* obj = static_cast<MediaControl*>(userParam);
+	obj->SignalHandler(signalMask);
+	return;
+}
+
+void MediaControl::SignalHandler(UINT8 signalMask)
+{
+	UINT8 dbusSignal = 0x00;
+	if (signalMask & MI_SIG_NEW_SONG)
+		dbusSignal |= SIGNAL_SEEK | SIGNAL_METADATA | SIGNAL_PLAYSTATUS | SIGNAL_CONTROLS;
+	if (signalMask & MI_SIG_PLAY_STATE)
+		dbusSignal |= SIGNAL_PLAYSTATUS;
+	if (signalMask & MI_SIG_POSITION)
+		dbusSignal |= SIGNAL_SEEK;
+	if (signalMask & MI_SIG_VOLUME)
+		dbusSignal |= SIGNAL_CONTROLS;
+	DBus_EmitSignal(dbusSignal);
 	return;
 }
