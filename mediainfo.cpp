@@ -21,20 +21,23 @@ static inline std::string FCC2Str(UINT32 fcc);
 void MediaInfo::PreparePlayback(void)
 {
 	PlayerBase* player = _player.GetPlayer();
+	PLR_SONG_INFO sInf;
 	char verStr[0x20];
 	
 	EnumerateTags();	// must be done before PreparePlayback(), as it may parse some of the tags
 	
+	player->GetSongInfo(sInf);
 	_volGain = 1.0;
-	_looping = (player->GetLoopTicks() != (UINT32)-1);
+	// Note: sInf.loopTick is -1 for non-looping songs. player->GetLoopTicks() returns 0 that case.
+	_looping = (sInf.loopTick != (UINT32)-1);
 	_fileFmt = player->GetPlayerName();
+	_fileVerNum = (sInf.fileVerMaj << 8) | (sInf.fileVerMin << 0);
 	_isRawLog = false;
 	if (player->GetPlayerType() == FCC_VGM)
 	{
 		VGMPlayer* vgmplay = dynamic_cast<VGMPlayer*>(player);
 		const VGM_HEADER* vgmhdr = vgmplay->GetFileHeader();
 		
-		_fileVerNum = vgmhdr->fileVer & 0xFFFF;
 		sprintf(verStr, "VGM %X.%02X", (vgmhdr->fileVer >> 8) & 0xFF, (vgmhdr->fileVer >> 0) & 0xFF);
 		
 		_fileEndPos = vgmhdr->dataEnd;
@@ -53,7 +56,6 @@ void MediaInfo::PreparePlayback(void)
 		S98Player* s98play = dynamic_cast<S98Player*>(player);
 		const S98_HEADER* s98hdr = s98play->GetFileHeader();
 		
-		_fileVerNum = s98hdr->fileVer << 8;
 		sprintf(verStr, "S98 v%u", s98hdr->fileVer);
 		
 		_fileStartPos = s98hdr->dataOfs;
@@ -68,7 +70,6 @@ void MediaInfo::PreparePlayback(void)
 		DROPlayer* droplay = dynamic_cast<DROPlayer*>(player);
 		const DRO_HEADER* drohdr = droplay->GetFileHeader();
 		
-		_fileVerNum = (drohdr->verMajor << 8) | (drohdr->verMinor << 0);
 		sprintf(verStr, "DRO v%u", drohdr->verMajor);	// DRO has a "verMinor" field, but it's always 0
 		
 		_fileStartPos = drohdr->dataOfs;

@@ -1009,6 +1009,7 @@ static UINT8 FilePlayCallback(PlayerBase* player, void* userParam, UINT8 evtType
 		if (mediaInfo._player.GetState() & PLAYSTATE_SEEK)
 			break;
 		//printf("Loop %u.\n", 1 + *(UINT32*)evtParam);
+		mediaInfo.Signal(MI_SIG_POSITION);
 		break;
 	case PLREVT_END:
 		mediaInfo._playState |= PLAYSTATE_END;

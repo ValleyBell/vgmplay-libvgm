@@ -71,9 +71,6 @@ typedef struct DBusMetadata_
 #define SIGNAL_VOLUME      0x20 // Volume needs to be updated
 #define SIGNAL_ALL         0xFF // All Signals
 
-// Needed for loop detection
-static UINT32 OldLoopCount;
-
 static std::string artpath; // Cached art path
 
 static DBusConnection* connection = NULL;
@@ -1035,25 +1032,18 @@ static DBusHandlerResult DBusHandler(DBusConnection* connection, DBusMessage* me
 
 		return DBUS_HANDLER_RESULT_HANDLED;
 	}
-	//Respond to Seek
 	else if(dbus_message_is_method_call(message, DBUS_MPRIS_PLAYER, "Seek"))
 	{
 		INT64 offset = 0;
-
 		if(!dbus_message_get_args(message, NULL, DBUS_TYPE_INT64, &offset, DBUS_TYPE_INVALID))
 			return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
 
+		DBusEmptyMethodResponse(connection, message);
 #ifdef DBUS_DEBUG
 		printf("Seek called with %lld\n", (long long)offset);
 #endif
-		INT32 TargetSeekPos = ReturnSamplePos(offset, mInf->_player);
-		mInf->Event(MI_EVT_SEEK_REL, TargetSeekPos);
-
-		DBusEmptyMethodResponse(connection, message);
-
-		// Emit seeked signal
-		DBus_EmitSignal(SIGNAL_SEEK);
-
+		mInf->Event(MI_EVT_SEEK_REL, ReturnSamplePos(offset, mInf->_player));
+		// the "seeked" signal will be emitted automatically by the player
 		return DBUS_HANDLER_RESULT_HANDLED;
 	}
 	else if(dbus_message_is_method_call(message, DBUS_MPRIS_PLAYER, "Play"))
@@ -1080,14 +1070,12 @@ static DBusHandlerResult DBusHandler(DBusConnection* connection, DBusMessage* me
 		mInf->Event(MI_EVT_CONTROL, MIE_CTRL_STOP);	// currently no effect
 		return DBUS_HANDLER_RESULT_HANDLED;
 	}
-	//Respond to Previous
 	else if(dbus_message_is_method_call(message, DBUS_MPRIS_PLAYER, "Previous"))
 	{
 		DBusEmptyMethodResponse(connection, message);
 		mInf->Event(MI_EVT_PLIST, MIE_PL_PREV);
 		return DBUS_HANDLER_RESULT_HANDLED;
 	}
-	//Respond to Next
 	else if(dbus_message_is_method_call(message, DBUS_MPRIS_PLAYER, "Next"))
 	{
 		DBusEmptyMethodResponse(connection, message);
@@ -1101,11 +1089,9 @@ static DBusHandlerResult DBusHandler(DBusConnection* connection, DBusMessage* me
 		if(!dbus_message_get_args(message, NULL, DBUS_TYPE_OBJECT_PATH, &path, DBUS_TYPE_INT64, &pos, DBUS_TYPE_INVALID))
 			return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
 
-		INT32 seek_pos = ReturnSamplePos(pos, mInf->_player);
-		mInf->Event(MI_EVT_SEEK_ABS, seek_pos);
-
 		DBusEmptyMethodResponse(connection, message);
-		DBus_EmitSignal(SIGNAL_SEEK);
+		mInf->Event(MI_EVT_SEEK_ABS, ReturnSamplePos(pos, mInf->_player));
+		// the "seeked" signal will be emitted automatically by the player
 		return DBUS_HANDLER_RESULT_HANDLED;
 	}
 	else if(dbus_message_is_method_call(message, DBUS_INTERFACE_PROPERTIES, "Set"))
@@ -1165,18 +1151,6 @@ void MediaControl::ReadWriteDispatch(void)
 {
 	if(connection == NULL)
 		return;
-
-	if (mInf->_player.GetPlayer() != NULL)
-	{
-		// Detect loops and send the seeked signal when appropriate
-		if(OldLoopCount != mInf->_player.GetCurLoop())
-		{
-			OldLoopCount = mInf->_player.GetCurLoop();
-			DBus_EmitSignal(SIGNAL_SEEK);
-		}
-		// TODO: instead of constantly polling the loop value, we should just process the PLREVT_LOOP event
-		// also, sending a SEEK signal here isn't really necessary, as DBus currently works with the total playback time and not the in-file time
-	}
 
 	// Wait at most for 1ms
 	dbus_connection_read_write_dispatch(connection, 1);
