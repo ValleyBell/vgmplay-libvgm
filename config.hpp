@@ -4,7 +4,7 @@
 #include <string>
 #include <vector>
 #include <map>
-#include <tuple>
+#include <utility>	// for std::pair
 
 struct CfgSection
 {

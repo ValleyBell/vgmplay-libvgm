@@ -92,7 +92,7 @@ public:
 	
 	std::vector<SignalHandler> _sigCb;
 	std::queue<EventData> _evtQueue;
-	bool _enableAlbumImage = false;
+	bool _enableAlbumImage;
 };
 
 #endif	// __MEDIAINFO_HPP__

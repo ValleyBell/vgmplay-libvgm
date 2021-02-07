@@ -57,7 +57,7 @@ static DWORD WINAPI KeyMessageThread(void* args)
 	while(retValB = GetMessage(&msg, NULL, 0, 0))
 	{
 		if (msg.message == WM_HOTKEY)
-			HandleMediaKeyPress(msg.wParam);
+			HandleMediaKeyPress((int)msg.wParam);
 	}
 	
 	UnregisterHotKey(NULL, VK_MEDIA_PLAY_PAUSE);

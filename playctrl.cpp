@@ -102,8 +102,8 @@ static void cls(void);
 #define KEY_ALT			0x4000
 
 
-static AudioDriver adOut = {ADRVTYPE_OUT, -1, "", 0, 0, NULL};
-static AudioDriver adLog = {ADRVTYPE_DISK, -1, "", 0, 0, NULL};
+static AudioDriver adOut /*= {ADRVTYPE_OUT, -1, "", 0, 0, NULL}*/;
+static AudioDriver adLog /*= {ADRVTYPE_DISK, -1, "", 0, 0, NULL}*/;
 
 static std::vector<UINT8> audioBuf;
 static OS_MUTEX* renderMtx;	// render thread mutex
@@ -150,6 +150,19 @@ UINT8 PlayerMain(UINT8 showFileName)
 	
 	ParseConfiguration(genOpts, 0x100, mediaInfo._chipOpts, playerCfg);
 	
+	{
+		// Manual initialization of adOut/adLog, because MSVC6 is unable to
+		// use initializer lists with classes that have (non-default) constructors.
+		adOut.driverType = ADRVTYPE_OUT;
+		adOut.dTypeID = -1;
+		adOut.dTypeName = "";
+		adOut.driverID = 0;
+		adOut.deviceID = 0;
+		adOut.data = NULL;
+		adLog = adOut;
+		adLog.driverType = ADRVTYPE_DISK;
+	}
+	
 	retVal = InitAudioSystem();
 	if (retVal)
 		return 1;
@@ -189,6 +202,7 @@ UINT8 PlayerMain(UINT8 showFileName)
 	}
 	mediaInfo._pbSongCnt = songList.size();
 	
+	mediaInfo._enableAlbumImage = false;	// disable by default, MediaCtrl objects will enable it on demand
 	//mediaInfo.AddSignalCallback(SignalCB, NULL);
 	mediaCtrl.Init(mediaInfo);
 	
@@ -208,7 +222,7 @@ UINT8 PlayerMain(UINT8 showFileName)
 		mediaInfo._playlistTrkID = sfl.playlistSongID;
 		if (sfl.playlistSongID == (size_t)-1)
 		{
-			mediaInfo._playlistPath.clear();
+			mediaInfo._playlistPath = std::string();
 			mediaInfo._playlistTrkCnt = 0;
 		}
 		else
@@ -565,7 +579,7 @@ static UINT8 PlayFile(void)
 		
 		if (manualRenderLoop && ! (mediaInfo._playState & PLAYSTATE_PAUSE))
 		{
-			UINT32 wrtBytes = FillBuffer(NULL, &myPlayer, audioBuf.size(), &audioBuf[0]);
+			UINT32 wrtBytes = FillBuffer(NULL, &myPlayer, (UINT32)audioBuf.size(), &audioBuf[0]);
 			if (adOut.data != NULL)
 				AudioDrv_WriteData(adOut.data, wrtBytes, &audioBuf[0]);
 			else if (adLog.data != NULL)

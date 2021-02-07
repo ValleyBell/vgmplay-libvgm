@@ -1,7 +1,7 @@
 #include <string>
 #include <vector>
 #include <map>
-#include <tuple>
+#include <utility>	// for std::pair
 #include <algorithm>	// for std::transform
 #include <cctype>	// for tolower()
 
@@ -65,7 +65,7 @@ Configuration& Configuration::operator+=(const Configuration& rhs)
 		if (state & 0x02)
 		{
 			state &= ~0x02;
-			valStr.push_back(text[curPos]);
+			valStr += text[curPos];
 		}
 		else if (text[curPos] == '\\')
 		{
@@ -79,7 +79,7 @@ Configuration& Configuration::operator+=(const Configuration& rhs)
 		}
 		else
 		{
-			valStr.push_back(text[curPos]);
+			valStr += text[curPos];
 		}
 	}
 	return valStr;

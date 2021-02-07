@@ -1,7 +1,7 @@
 #include <string>
 #include <vector>
 #include <map>
-#include <cmath>
+#include <math.h>
 #ifdef _WIN32
 #include <windows.h>
 #else
@@ -50,7 +50,7 @@ void MediaInfo::PreparePlayback(void)
 		
 		_fileEndPos = vgmhdr->dataEnd;
 		_fileStartPos = vgmhdr->dataOfs;
-		_volGain = std::pow(2.0, vgmhdr->volumeGain / (double)0x100);
+		_volGain = pow(2.0, vgmhdr->volumeGain / (double)0x100);
 		
 		// RAW Log: no loop, no/empty Creator tag, no Title tag
 		if (! vgmhdr->loopOfs && _songTags.find("ENCODED_BY") == _songTags.end() &&
@@ -221,7 +221,7 @@ void MediaInfo::SearchAlbumImage(void)
 	printf("Starting art search.\n");
 #endif
 	
-	_albumImgPath.clear();
+	_albumImgPath = std::string();
 	if (_playlistTrkID != (size_t)-1)
 	{
 		// for "abc/d/playlist.m3u", try "abc/d/playlist.png"
@@ -309,13 +309,15 @@ void MediaInfo::SearchAlbumImage(void)
 
 void MediaInfo::AddSignalCallback(MI_SIGNAL_CB func, void* param)
 {
-	_sigCb.push_back({func, param});
+	SignalHandler scb = {func, param};
+	_sigCb.push_back(scb);
 	return;
 }
 
 void MediaInfo::Event(UINT8 evtType, INT32 evtParam)
 {
-	_evtQueue.push({evtType, evtParam});
+	EventData ed = {evtType, evtParam};
+	_evtQueue.push(ed);
 	return;
 }
 

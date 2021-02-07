@@ -146,3 +146,9 @@ target_include_directories(${PROJECT_NAME} PRIVATE ${PROJECT_SOURCE_DIR} ${INCLU
 target_link_libraries(${PROJECT_NAME} PRIVATE ${LIBRARIES} libvgm::vgm-utils libvgm::vgm-audio libvgm::vgm-emu libvgm::vgm-player ${PLAYER_LIBS})
 install(TARGETS ${PROJECT_NAME} RUNTIME DESTINATION "bin")
 #add_sanitizers(${PROJECT_NAME})
+
+if(MSVC AND MSVC_VERSION LESS 1400)
+	target_include_directories(${PROJECT_NAME} PRIVATE
+		${PROJECT_SOURCE_DIR}/libs/include_vc6
+	)
+endif()

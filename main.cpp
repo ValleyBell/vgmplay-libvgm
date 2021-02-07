@@ -1,6 +1,7 @@
 // TODO:
 //	xx showStrmCmds ("ShowStreamCmds")
 //	xx soundWhilePaused ("EmulatePause")
+//	- catch Ctrl+C
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -384,13 +385,13 @@ static std::string GenerateOptData(const OptionList& optList, std::vector<struct
 	shortOpts = "";
 	for (curOpt = 0; curOpt < optList.size(); curOpt ++)
 	{
-		const auto& optDef = optList[curOpt];
+		const OptionItem& optDef = optList[curOpt];
 		
 		if (optDef.shortOpt != '\0')
 		{
-			shortOpts.push_back(optDef.shortOpt);
+			shortOpts += optDef.shortOpt;
 			if (optDef.flags & 0x01)
-				shortOpts.push_back(':');
+				shortOpts += ':';
 		}
 		
 		if (longOpts != NULL)
@@ -407,7 +408,7 @@ static std::string GenerateOptData(const OptionList& optList, std::vector<struct
 	if (longOpts != NULL)
 	{
 		// write terminator option
-		auto& lOptTerm = (*longOpts)[optList.size()];
+		struct option& lOptTerm = (*longOpts)[optList.size()];
 		memset(&lOptTerm, 0x00, sizeof(struct option));
 	}
 	
@@ -446,7 +447,7 @@ static void PrintArgumentHelp(const OptionList& optList)
 	
 	for (curOpt = 0; curOpt < optList.size(); curOpt ++)
 	{
-		const auto& oItm = optList[curOpt];
+		const OptionItem& oItm = optList[curOpt];
 		int padding = static_cast<int>(maxCmdLen - cmdCol[curOpt].length());
 		printf("%*s%s%*s%s\n", indent, "", cmdCol[curOpt].c_str(), padding, "  ", oItm.helpText);
 	}
