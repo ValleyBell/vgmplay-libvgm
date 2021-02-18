@@ -12,10 +12,13 @@ project(vgmplay VERSION 0.5 LANGUAGES C CXX)
 #set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${PROJECT_BINARY_DIR}/bin)
 #set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${PROJECT_BINARY_DIR}/bin)
 
+list(APPEND CMAKE_MODULE_PATH "${PROJECT_SOURCE_DIR}/libvgm/libs/cmake_modules/")
+
 find_package(ZLIB REQUIRED)
 find_package(Threads REQUIRED)
 find_package(Iconv QUIET)
 find_package(libvgm REQUIRED)
+find_package(LibAO REQUIRED)
 
 if(MSVC)
 	if(CMAKE_CL_64)
