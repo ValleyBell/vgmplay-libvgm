@@ -2,6 +2,7 @@
 //	xx showStrmCmds ("ShowStreamCmds")
 //	xx soundWhilePaused ("EmulatePause")
 //	- catch Ctrl+C
+//	- config entry for "Media Control" features
 
 #include <stdio.h>
 #include <stdlib.h>

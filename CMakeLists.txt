@@ -131,6 +131,8 @@ set(PLAYER_LIBS)
 list(APPEND PLAYER_HEADERS mediactrl.hpp)
 if(MEDIA_CONTROLS STREQUAL "WIN_KEYS")
 	list(APPEND PLAYER_FILES mediactrl_WinKeys.cpp)
+elseif(MEDIA_CONTROLS STREQUAL "WIN_OVERLAY")
+	list(APPEND PLAYER_FILES mediactrl_WinSMTC.cpp)
 elseif(MEDIA_CONTROLS STREQUAL "DBUS")
 	if (NOT DBus1_FOUND)	# don't import again if already found - the module doesn't like this
 		find_package(DBus1 REQUIRED)
