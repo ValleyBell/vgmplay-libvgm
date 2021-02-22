@@ -8,6 +8,7 @@
 #include <wrl.h>
 
 #include <stdtype.h>
+#include <utils/StrUtils.h>
 #include "mediainfo.hpp"
 #include "mediactrl.hpp"
 
@@ -44,6 +45,7 @@ public:
 #endif	/* __ISystemMediaTransportControlsInterop_INTERFACE_DEFINED__ */
 
 
+static CPCONV* cpcU8_Wide;
 static HWND mWindow;
 static MediaInfo* mInf;
 static Microsoft::WRL::ComPtr<ISMTC> mSMTCtrl;
@@ -76,27 +78,6 @@ static UINT8 HandleMediaKeyPress(WinMedia::SystemMediaTransportControlsButton ke
 	}
 	
 	return 1;
-}
-
-static bool EnableMediaKeys(void)
-{
-	if (! mSMTCtrl)
-		return true;
-	HRESULT hRes;
-	
-	hRes = mSMTCtrl->put_IsPlayEnabled(true);
-	if (FAILED(hRes))
-		printf("Unable to enable Media Button: %s\n", "Play");
-	hRes = mSMTCtrl->put_IsPauseEnabled(true);
-	if (FAILED(hRes))
-		printf("Unable to enable Media Button: %s\n", "Pause");
-	hRes = mSMTCtrl->put_IsPreviousEnabled(true);
-	if (FAILED(hRes))
-		printf("Unable to enable Media Button: %s\n", "Previous");
-	hRes = mSMTCtrl->put_IsNextEnabled(true);
-	if (FAILED(hRes))
-		printf("Unable to enable Media Button: %s\n", "Next");
-	return true;
 }
 
 static void RefreshPlaybackState(void)
@@ -188,12 +169,73 @@ static bool RegisterEvents(void)
 	return true;
 }
 
-static void UnregisterEvents()
+static void UnregisterEvents(void)
 {
 	if (! mSMTCtrl)
 		return;
 	if (mBtnPressEvt.value != 0)
 		mSMTCtrl->remove_ButtonPressed(mBtnPressEvt);
+	return;
+}
+
+static wchar_t* StrUTF8toUTF16(const char* strUTF8)
+{
+	if (strUTF8 == NULL)
+		return NULL;
+	
+	size_t tempLen = 0;
+	wchar_t* result = NULL;
+	UINT8 retVal = CPConv_StrConvert(cpcU8_Wide, &tempLen, reinterpret_cast<char**>(&result), 0, strUTF8);
+	if (retVal & 0x80)
+		tempLen = 0;
+	if (retVal && tempLen == 0)
+	{
+		free(result);
+		return NULL;
+	}
+	return result;
+}
+
+static void SetMetadata(void)
+{
+	HRESULT hRes;
+	Microsoft::WRL::ComPtr<WinMedia::IMusicDisplayProperties> musicProps;
+	
+	hRes = mDispUpd->put_Type(WinMedia::MediaPlaybackType::MediaPlaybackType_Music);
+	if (FAILED(hRes))
+		return;
+	hRes = mDispUpd->get_MusicProperties(musicProps.GetAddressOf());
+	if (FAILED(hRes))
+	{
+		printf("Failed to get music properties");
+		return;
+	}
+	
+	wchar_t* artistWStr = StrUTF8toUTF16(mInf->GetSongTagForDisp("AUTHOR"));
+	wchar_t* titleWStr = StrUTF8toUTF16(mInf->GetSongTagForDisp("TITLE"));
+	wchar_t* albumWStr = StrUTF8toUTF16(mInf->GetSongTagForDisp("GAME"));
+	
+	hRes = musicProps->put_Artist(Microsoft::WRL::Wrappers::HStringReference(artistWStr).Get());
+	if (FAILED(hRes))
+		printf("Failed to set the music's artist");
+	hRes = musicProps->put_Title(Microsoft::WRL::Wrappers::HStringReference(titleWStr).Get());
+	if (FAILED(hRes))
+		printf("Failed to set the music's title");
+	hRes = musicProps->put_AlbumArtist(Microsoft::WRL::Wrappers::HStringReference(albumWStr).Get());
+	if (FAILED(hRes))
+		printf("Failed to set the music's album");
+	
+	free(artistWStr);
+	free(titleWStr);
+	free(albumWStr);
+	
+	hRes = mDispUpd->Update();
+	if (FAILED(hRes))
+	{
+		printf("Failed to update metadata!");
+		return;
+	}
+	
 	return;
 }
 
@@ -203,10 +245,12 @@ UINT8 MediaControl::Init(MediaInfo& mediaInfo)
 	if (mSMTCtrl)
 		return 0x01;
 	
+	bool retB;
+	UINT8 retVal;
+	
 	mInf = &mediaInfo;
 	mInf->_enableAlbumImage = false;
 	
-	bool retB;
 	retB = InitDisplayAndControls();
 	if (! retB)
 		return 0xFF;
@@ -216,6 +260,10 @@ UINT8 MediaControl::Init(MediaInfo& mediaInfo)
 		Deinit();
 		return 0xFE;
 	}
+	
+	retVal = CPConv_Init(&cpcU8_Wide, "UTF-8", "UTF-16LE");
+	if (retVal & 0x80)
+		cpcU8_Wide = NULL;
 	
 	mSMTCtrl->put_IsPlayEnabled(true);
 	mSMTCtrl->put_IsPauseEnabled(true);
@@ -241,6 +289,12 @@ void MediaControl::Deinit(void)
 	//ClearMetadata();
 	mSMTCtrl->put_IsEnabled(false);
 	
+	if (cpcU8_Wide != NULL)
+	{
+		CPConv_Deinit(cpcU8_Wide);
+		cpcU8_Wide = NULL;
+	}
+	
 	return;
 }
 
@@ -263,6 +317,7 @@ void MediaControl::SignalHandler(UINT8 signalMask)
 		mSMTCtrl->put_IsPreviousEnabled(mInf->_pbSongID > 0);
 		mSMTCtrl->put_IsNextEnabled(mInf->_pbSongID + 1 < mInf->_pbSongCnt);
 		// TODO: refresh meta data
+		SetMetadata();
 	}
 	if (signalMask & (MI_SIG_NEW_SONG | MI_SIG_PLAY_STATE))
 		RefreshPlaybackState();
