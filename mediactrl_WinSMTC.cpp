@@ -1,3 +1,4 @@
+// huge thanks to the Firefox developers for figuring out how all of this stuff works
 #include <windows.h>
 #include <stdio.h>
 
@@ -14,6 +15,7 @@
 
 namespace WinMedia = ABI::Windows::Media;
 namespace WinFoundation = ABI::Windows::Foundation;
+namespace WinStrgStrm = ABI::Windows::Storage::Streams;
 
 typedef WinMedia::ISystemMediaTransportControls ISMTC;
 typedef WinMedia::SystemMediaTransportControlsProperty SMTCProperty;
@@ -25,7 +27,6 @@ typedef WinFoundation::ITypedEventHandler<WinMedia::SystemMediaTransportControls
 #ifndef RuntimeClass_WinMedia_SMTC
 #define RuntimeClass_WinMedia_SMTC	L"Windows.Media.SystemMediaTransportControls"
 #endif
-
 #ifndef RuntimeClass_WinStrgStrm_RandAccStreamRef
 #define RuntimeClass_WinStrgStrm_RandAccStreamRef	L"Windows.Storage.Streams.RandomAccessStreamReference"
 #endif
@@ -50,7 +51,9 @@ static HWND mWindow;
 static MediaInfo* mInf;
 static Microsoft::WRL::ComPtr<ISMTC> mSMTCtrl;
 static Microsoft::WRL::ComPtr<ISMTCDisplayUpdater> mDispUpd;
+static Microsoft::WRL::ComPtr<WinStrgStrm::IRandomAccessStreamReference> mImgStrmRef;
 static EventRegistrationToken mBtnPressEvt;
+static std::string mLastThumbPath;
 
 static UINT8 HandleMediaKeyPress(WinMedia::SystemMediaTransportControlsButton keycode)
 {
@@ -201,13 +204,11 @@ static void SetMetadata(void)
 	HRESULT hRes;
 	Microsoft::WRL::ComPtr<WinMedia::IMusicDisplayProperties> musicProps;
 	
-	hRes = mDispUpd->put_Type(WinMedia::MediaPlaybackType::MediaPlaybackType_Music);
-	if (FAILED(hRes))
-		return;
+	mDispUpd->put_Type(WinMedia::MediaPlaybackType::MediaPlaybackType_Music);
 	hRes = mDispUpd->get_MusicProperties(musicProps.GetAddressOf());
 	if (FAILED(hRes))
 	{
-		printf("Failed to get music properties");
+		printf("SMTC: Failed to get music properties!\n");
 		return;
 	}
 	
@@ -217,13 +218,13 @@ static void SetMetadata(void)
 	
 	hRes = musicProps->put_Artist(Microsoft::WRL::Wrappers::HStringReference(artistWStr).Get());
 	if (FAILED(hRes))
-		printf("Failed to set the music's artist");
+		printf("SMTC: Failed to set artist\n");
 	hRes = musicProps->put_Title(Microsoft::WRL::Wrappers::HStringReference(titleWStr).Get());
 	if (FAILED(hRes))
-		printf("Failed to set the music's title");
+		printf("SMTC: Failed to set title\n");
 	hRes = musicProps->put_AlbumArtist(Microsoft::WRL::Wrappers::HStringReference(albumWStr).Get());
 	if (FAILED(hRes))
-		printf("Failed to set the music's album");
+		printf("SMTC: Failed to set album\n");
 	
 	free(artistWStr);
 	free(titleWStr);
@@ -232,9 +233,76 @@ static void SetMetadata(void)
 	hRes = mDispUpd->Update();
 	if (FAILED(hRes))
 	{
-		printf("Failed to update metadata!");
+		printf("SMTC: Failed to update metadata!");
 		return;
 	}
+	
+	return;
+}
+
+static void ClearThumbnail()
+{
+	if (mDispUpd == NULL)
+		return;
+	
+	mDispUpd->put_Thumbnail(nullptr);
+	mLastThumbPath = std::string();
+	mDispUpd->Update();
+	
+	return;
+}
+
+static void SetThumbnail(const std::string& filePath)
+{
+	if (mDispUpd == NULL)
+		return;
+	if (mLastThumbPath == filePath)
+		return;
+	
+	if (filePath.empty() || true)
+	{
+		ClearThumbnail();
+		return;
+	}
+	
+	HRESULT hRes;
+	Microsoft::WRL::ComPtr<WinStrgStrm::IRandomAccessStreamReferenceStatics> streamRefFactory;
+	
+	hRes = WinFoundation::GetActivationFactory(
+		Microsoft::WRL::Wrappers::HStringReference(RuntimeClass_WinStrgStrm_RandAccStreamRef).Get(),
+		streamRefFactory.GetAddressOf());
+	if (FAILED(hRes))
+	{
+		printf("SMTC: Unable to create RandomAccessStreamReferenceStatics object!\n");
+		return;
+	}
+	
+	Microsoft::WRL::ComPtr<ABI::Windows::Storage::IStorageFile> file;
+	// TODO: use StorageFile.GetFileFromPathAsync(filePath) here to get "file"
+	
+	hRes = streamRefFactory->CreateFromFile(file.Get(), mImgStrmRef.GetAddressOf());
+	if (FAILED(hRes))
+	{
+		printf("SMTC: Failed to create ImageStreamReference!\n");
+		return;
+	}
+	
+	hRes = mDispUpd->put_Thumbnail(mImgStrmRef.Get());
+	if (FAILED(hRes))
+	{
+		printf("SMTC: Failed to set thumbnail\n");
+		return;
+	}
+	mLastThumbPath = filePath;
+	
+	hRes = mDispUpd->Update();
+	if (FAILED(hRes))
+	{
+		printf("SMTC: Failed to update thumbnail\n");
+		return;
+	}
+	
+	//mThumbnailUrl = aUrl;
 	
 	return;
 }
@@ -249,7 +317,7 @@ UINT8 MediaControl::Init(MediaInfo& mediaInfo)
 	UINT8 retVal;
 	
 	mInf = &mediaInfo;
-	mInf->_enableAlbumImage = false;
+	mInf->_enableAlbumImage = true;
 	
 	retB = InitDisplayAndControls();
 	if (! retB)
@@ -275,6 +343,7 @@ UINT8 MediaControl::Init(MediaInfo& mediaInfo)
 	
 	mInf->AddSignalCallback(&MediaControl::SignalCB, this);
 	mSMTCtrl->put_PlaybackStatus(WinMedia::MediaPlaybackStatus_Closed);
+	ClearThumbnail();
 	
 	return 0x00;
 }
@@ -286,7 +355,7 @@ void MediaControl::Deinit(void)
 	
 	mSMTCtrl->put_PlaybackStatus(WinMedia::MediaPlaybackStatus_Closed);
 	UnregisterEvents();
-	//ClearMetadata();
+	ClearThumbnail();
 	mSMTCtrl->put_IsEnabled(false);
 	
 	if (cpcU8_Wide != NULL)
@@ -316,8 +385,8 @@ void MediaControl::SignalHandler(UINT8 signalMask)
 	{
 		mSMTCtrl->put_IsPreviousEnabled(mInf->_pbSongID > 0);
 		mSMTCtrl->put_IsNextEnabled(mInf->_pbSongID + 1 < mInf->_pbSongCnt);
-		// TODO: refresh meta data
 		SetMetadata();
+		SetThumbnail(mInf->_albumImgPath);
 	}
 	if (signalMask & (MI_SIG_NEW_SONG | MI_SIG_PLAY_STATE))
 		RefreshPlaybackState();
