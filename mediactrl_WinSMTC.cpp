@@ -26,12 +26,9 @@ typedef WinMedia::ISystemMediaTransportControlsDisplayUpdater ISMTCDisplayUpdate
 typedef WinFoundation::ITypedEventHandler<WinMedia::SystemMediaTransportControls*, WinMedia::SystemMediaTransportControlsButtonPressedEventArgs*> \
 	SMTC_ButtonPressEvt_Callback;
 
-#ifndef RuntimeClass_WinMedia_SMTC
 #define RuntimeClass_WinMedia_SMTC	L"Windows.Media.SystemMediaTransportControls"
-#endif
-#ifndef RuntimeClass_WinStrgStrm_RandAccStreamRef
 #define RuntimeClass_WinStrgStrm_RandAccStreamRef	L"Windows.Storage.Streams.RandomAccessStreamReference"
-#endif
+#define RuntimeClass_WinStrg_StorageFile	L"Windows.Storage.StorageFile"
 
 #ifndef ISystemMediaTransportControlsInterop
 EXTERN_C const IID IID_ISystemMediaTransportControlsInterop;
@@ -225,6 +222,8 @@ static void SetMetadata(void)
 {
 	HRESULT hRes;
 	MsWRL::ComPtr<WinMedia::IMusicDisplayProperties> musicProps;
+	MsWRL::ComPtr<WinMedia::IMusicDisplayProperties2> musicProp2;
+	MsWRL::ComPtr<WinMedia::IMusicDisplayProperties3> musicProp3;
 	
 	mDispUpd->put_Type(WinMedia::MediaPlaybackType::MediaPlaybackType_Music);
 	hRes = mDispUpd->get_MusicProperties(musicProps.GetAddressOf());
@@ -233,6 +232,8 @@ static void SetMetadata(void)
 		printf("SMTC: Failed to get music properties!\n");
 		return;
 	}
+	musicProps.As(&musicProp2);	// ComPtr stays NULL when casting should fail
+	musicProps.As(&musicProp3);
 	
 	wchar_t* artistWStr = StrUTF8toUTF16(mInf->GetSongTagForDisp("AUTHOR"));
 	wchar_t* titleWStr = StrUTF8toUTF16(mInf->GetSongTagForDisp("TITLE"));
@@ -247,6 +248,11 @@ static void SetMetadata(void)
 	hRes = musicProps->put_AlbumArtist(MsWRL::Wrappers::HStringReference(albumWStr).Get());
 	if (FAILED(hRes))
 		printf("SMTC: Failed to set album\n");
+	
+	if (musicProp2)
+		musicProp2->put_TrackNumber(1 + mInf->_playlistTrkID);
+	if (musicProp3)
+		musicProp3->put_AlbumTrackCount(mInf->_playlistTrkCnt);
 	
 	free(artistWStr);
 	free(titleWStr);
@@ -338,7 +344,7 @@ static void SetThumbnail(const std::string& filePath)
 	
 	MsWRL::ComPtr<WinStrg::IStorageFileStatics> strgFileStatic;
 	HRESULT hRes = WinFoundation::GetActivationFactory(
-		MsWRL::Wrappers::HStringReference(RuntimeClass_Windows_Storage_StorageFile).Get(),
+		MsWRL::Wrappers::HStringReference(RuntimeClass_WinStrg_StorageFile).Get(),
 		strgFileStatic.GetAddressOf());
 	
 	// soooo much boilerplate code just to get the StorageFile object ...
