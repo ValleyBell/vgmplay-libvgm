@@ -3,7 +3,7 @@
 #include <stdio.h>
 
 //#define WINDOWS_FOUNDATION_UNIVERSALAPICONTRACT_VERSION	0x10000
-#include <Windows.Media.h>
+#include <windows.media.h>
 #include <winsdkver.h>
 #include <wrl.h>
 
@@ -25,10 +25,13 @@ typedef WinMedia::ISystemMediaTransportControlsDisplayUpdater ISMTCDisplayUpdate
 
 typedef WinFoundation::ITypedEventHandler<WinMedia::SystemMediaTransportControls*, WinMedia::SystemMediaTransportControlsButtonPressedEventArgs*> \
 	SMTC_ButtonPressEvt_Callback;
+typedef WinFoundation::ITypedEventHandler<WinMedia::SystemMediaTransportControls*, WinMedia::PlaybackPositionChangeRequestedEventArgs*> \
+	PlaybacPos_ChangeReqEvt_Callback;
 
-#define RuntimeClass_WinMedia_SMTC	L"Windows.Media.SystemMediaTransportControls"
-#define RuntimeClass_WinStrgStrm_RandAccStreamRef	L"Windows.Storage.Streams.RandomAccessStreamReference"
-#define RuntimeClass_WinStrg_StorageFile	L"Windows.Storage.StorageFile"
+#define RuntimeClass_WinMedia_SMTC                  L"Windows.Media.SystemMediaTransportControls"
+#define RuntimeClass_WinStrgStrm_RandAccStreamRef   L"Windows.Storage.Streams.RandomAccessStreamReference"
+#define RuntimeClass_WinStrg_StorageFile            L"Windows.Storage.StorageFile"
+#define RuntimeClass_WinMedia_SMTCTimelineProps     L"Windows.Media.SystemMediaTransportControlsTimelineProperties"
 
 #ifndef ISystemMediaTransportControlsInterop
 EXTERN_C const IID IID_ISystemMediaTransportControlsInterop;
@@ -44,11 +47,17 @@ public:
 };
 #endif	/* __ISystemMediaTransportControlsInterop_INTERFACE_DEFINED__ */
 
+#define TICKS_PER_SECOND	10000000
+
+
+static inline INT32 WinTicks2Samples(INT64 winTicks, const PlayerA& player);
+static inline INT64 Time2WinTicks(double time);
 
 static UINT8 HandleMediaKeyPress(WinMedia::SystemMediaTransportControlsButton keycode);
 static void RefreshPlaybackState(void);
 static bool InitDisplayAndControls(void);
 static HRESULT ButtonCallback(WinMedia::ISystemMediaTransportControls*, WinMedia::ISystemMediaTransportControlsButtonPressedEventArgs* pArgs);
+static HRESULT PlaybackPosCallback(WinMedia::ISystemMediaTransportControls*, WinMedia::IPlaybackPositionChangeRequestedEventArgs* pArgs);
 static bool RegisterEvents(void);
 static void UnregisterEvents(void);
 
@@ -67,10 +76,22 @@ static MediaInfo* mInf;
 static MsWRL::ComPtr<ISMTC> mSMTCtrl;
 static MsWRL::ComPtr<ISMTCDisplayUpdater> mDispUpd;
 static EventRegistrationToken mBtnPressEvt;
+static EventRegistrationToken mPbPosChangeEvt;
 
 static MsWRL::ComPtr< WinFoundation::IAsyncOperation<WinStrg::StorageFile*> > mSFileAsyncOp;
 static std::string mThumbPathWIP;	// thumbnail file path while async operations are running
 static std::string mLastThumbPath;
+
+static inline INT32 WinTicks2Samples(INT64 winTicks, const PlayerA& player)
+{
+	return (INT32)((winTicks / (double)TICKS_PER_SECOND) * (double)player.GetSampleRate());
+}
+
+static inline INT64 Time2WinTicks(double time)
+{
+	return (INT64)(time * TICKS_PER_SECOND);
+}
+
 
 static UINT8 HandleMediaKeyPress(WinMedia::SystemMediaTransportControlsButton keycode)
 {
@@ -173,20 +194,48 @@ static HRESULT ButtonCallback(WinMedia::ISystemMediaTransportControls*, WinMedia
 	return S_OK;
 }
 
+static HRESULT PlaybackPosCallback(WinMedia::ISystemMediaTransportControls*, WinMedia::IPlaybackPositionChangeRequestedEventArgs* pArgs)
+{
+	if (pArgs == NULL)
+		return S_FALSE;
+	WinFoundation::TimeSpan tSpan;
+	
+	HRESULT hRes = pArgs->get_RequestedPlaybackPosition(&tSpan);
+	if (FAILED(hRes))
+	{
+		printf("SMTC SeekEvent: Unable to get Button!");
+		return S_FALSE;
+	}
+	
+	mInf->Event(MI_EVT_SEEK_ABS, WinTicks2Samples(tSpan.Duration, mInf->_player));
+	return S_OK;
+}
+
 static bool RegisterEvents(void)
 {
 	if (! mSMTCtrl)
 		return true;
 	
-	MsWRL::ComPtr<SMTC_ButtonPressEvt_Callback> callbackbtnPressed =
+	MsWRL::ComPtr<SMTC_ButtonPressEvt_Callback> cbBtnPressed =
 		MsWRL::Callback<SMTC_ButtonPressEvt_Callback>(ButtonCallback);
-	HRESULT hRes = mSMTCtrl->add_ButtonPressed(callbackbtnPressed.Get(), &mBtnPressEvt);
+	HRESULT hRes = mSMTCtrl->add_ButtonPressed(cbBtnPressed.Get(), &mBtnPressEvt);
 	if (FAILED(hRes))
 	{
 		printf("SMTC: Unable to install callback!");
 		return false;
 	}
 	
+	MsWRL::ComPtr<WinMedia::ISystemMediaTransportControls2> smtcCtrl2;
+	mSMTCtrl.As(&smtcCtrl2);
+	if (smtcCtrl2)
+	{
+		MsWRL::ComPtr<PlaybacPos_ChangeReqEvt_Callback> cbPbPosChange =
+			MsWRL::Callback<PlaybacPos_ChangeReqEvt_Callback>(PlaybackPosCallback);
+		HRESULT hRes = smtcCtrl2->add_PlaybackPositionChangeRequested(cbPbPosChange.Get(), &mPbPosChangeEvt);
+		if (FAILED(hRes))
+			printf("SMTC: Unable to install callback for seeking!");
+	}
+
 	return true;
 }
 
@@ -194,8 +243,18 @@ static void UnregisterEvents(void)
 {
 	if (! mSMTCtrl)
 		return;
+	
 	if (mBtnPressEvt.value != 0)
 		mSMTCtrl->remove_ButtonPressed(mBtnPressEvt);
+	
+	MsWRL::ComPtr<WinMedia::ISystemMediaTransportControls2> smtcCtrl2;
+	mSMTCtrl.As(&smtcCtrl2);
+	if (smtcCtrl2)
+	{
+		if (mPbPosChangeEvt.value != 0)
+			smtcCtrl2->remove_PlaybackPositionChangeRequested(mPbPosChangeEvt);
+	}
+	
 	return;
 }
 
@@ -216,6 +275,47 @@ static wchar_t* StrUTF8toUTF16(const char* strUTF8)
 		return NULL;
 	}
 	return result;
+}
+
+static void SetTrackTime(void)
+{
+	MsWRL::ComPtr<WinMedia::ISystemMediaTransportControls2> smtcCtrl2;
+	mSMTCtrl.As(&smtcCtrl2);
+	if (! smtcCtrl2)
+		return;
+	
+	WinFoundation::TimeSpan time0;
+	WinFoundation::TimeSpan songLen;
+	WinFoundation::TimeSpan pbPos;
+	HRESULT hRes;
+	
+	MsWRL::ComPtr<WinMedia::ISystemMediaTransportControlsTimelineProperties> timeProps;
+	hRes = WinFoundation::ActivateInstance(
+		MsWRL::Wrappers::HStringReference(RuntimeClass_WinMedia_SMTCTimelineProps).Get(),
+		timeProps.GetAddressOf());
+	if (FAILED(hRes))
+	{
+		printf("SMTC: Unable to create TimelineProperties object!\n");
+		return;
+	}
+	
+	time0.Duration = 0;
+	songLen.Duration = Time2WinTicks(mInf->_player.GetTotalTime(1));
+	pbPos.Duration = Time2WinTicks(mInf->_player.GetCurTime(1));
+	
+	timeProps->put_StartTime(time0);
+	timeProps->put_EndTime(songLen);
+	timeProps->put_MinSeekTime(time0);
+	timeProps->put_MaxSeekTime(songLen);
+	timeProps->put_Position(pbPos);
+	hRes = smtcCtrl2->UpdateTimelineProperties(timeProps.Get());
+	if (FAILED(hRes))
+	{
+		printf("SMTC: Unable to set track time properties!\n");
+		return;
+	}
+	
+	return;
 }
 
 static void SetMetadata(void)
@@ -346,7 +446,12 @@ static void SetThumbnail(const std::string& filePath)
 	HRESULT hRes = WinFoundation::GetActivationFactory(
 		MsWRL::Wrappers::HStringReference(RuntimeClass_WinStrg_StorageFile).Get(),
 		strgFileStatic.GetAddressOf());
-	
+	if (FAILED(hRes))
+	{
+		printf("SMTC: Unable to create StorageFileStatics object!\n");
+		return;
+	}
+
 	// soooo much boilerplate code just to get the StorageFile object ...
 	hRes = strgFileStatic->GetFileFromPathAsync(MsWRL::Wrappers::HStringReference(thumbPathW).Get(), &mSFileAsyncOp);
 	free(thumbPathW);
@@ -486,12 +591,15 @@ void MediaControl::SignalHandler(UINT8 signalMask)
 		mSMTCtrl->put_IsNextEnabled(mInf->_pbSongID + 1 < mInf->_pbSongCnt);
 		SetMetadata();
 		SetThumbnail(mInf->_albumImgPath);
+		signalMask |= (MI_SIG_PLAY_STATE | MI_SIG_POSITION);
 	}
 	
-	if (signalMask & (MI_SIG_NEW_SONG | MI_SIG_PLAY_STATE))
+	if (signalMask & MI_SIG_PLAY_STATE)
 		RefreshPlaybackState();
 	
-	//if (signalMask & MI_SIG_POSITION) ;
+	if (signalMask & MI_SIG_POSITION)
+		SetTrackTime();
+	
 	//if (signalMask & MI_SIG_VOLUME) ;
 	
 	return;
