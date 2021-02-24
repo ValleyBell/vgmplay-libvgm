@@ -3,7 +3,6 @@
 #include <stdio.h>
 
 //#define WINDOWS_FOUNDATION_UNIVERSALAPICONTRACT_VERSION	0x10000
-#pragma comment(lib, "runtimeobject.lib")
 #include <Windows.Media.h>
 #include <winsdkver.h>
 #include <wrl.h>
@@ -13,8 +12,11 @@
 #include "mediainfo.hpp"
 #include "mediactrl.hpp"
 
+
+namespace MsWRL = Microsoft::WRL;
 namespace WinMedia = ABI::Windows::Media;
 namespace WinFoundation = ABI::Windows::Foundation;
+namespace WinStrg = ABI::Windows::Storage;
 namespace WinStrgStrm = ABI::Windows::Storage::Streams;
 
 typedef WinMedia::ISystemMediaTransportControls ISMTC;
@@ -46,13 +48,31 @@ public:
 #endif	/* __ISystemMediaTransportControlsInterop_INTERFACE_DEFINED__ */
 
 
+static UINT8 HandleMediaKeyPress(WinMedia::SystemMediaTransportControlsButton keycode);
+static void RefreshPlaybackState(void);
+static bool InitDisplayAndControls(void);
+static HRESULT ButtonCallback(WinMedia::ISystemMediaTransportControls*, WinMedia::ISystemMediaTransportControlsButtonPressedEventArgs* pArgs);
+static bool RegisterEvents(void);
+static void UnregisterEvents(void);
+
+static wchar_t* StrUTF8toUTF16(const char* strUTF8);
+static void SetMetadata(void);
+static void CancelAsync(void);
+static void ClearThumbnail();
+static HRESULT StorageFileAsyncCallback(WinFoundation::IAsyncOperation<WinStrg::StorageFile*>* aAsyncOp, AsyncStatus aStatus);
+static void SetThumbnail(const std::string& filePath);
+static void SetThumbnail_Exec(MsWRL::ComPtr<WinStrg::IStorageFile> thumbISF);
+
+
 static CPCONV* cpcU8_Wide;
 static HWND mWindow;
 static MediaInfo* mInf;
-static Microsoft::WRL::ComPtr<ISMTC> mSMTCtrl;
-static Microsoft::WRL::ComPtr<ISMTCDisplayUpdater> mDispUpd;
-static Microsoft::WRL::ComPtr<WinStrgStrm::IRandomAccessStreamReference> mImgStrmRef;
+static MsWRL::ComPtr<ISMTC> mSMTCtrl;
+static MsWRL::ComPtr<ISMTCDisplayUpdater> mDispUpd;
 static EventRegistrationToken mBtnPressEvt;
+
+static MsWRL::ComPtr< WinFoundation::IAsyncOperation<WinStrg::StorageFile*> > mSFileAsyncOp;
+static std::string mThumbPathWIP;	// thumbnail file path while async operations are running
 static std::string mLastThumbPath;
 
 static UINT8 HandleMediaKeyPress(WinMedia::SystemMediaTransportControlsButton keycode)
@@ -93,20 +113,21 @@ static void RefreshPlaybackState(void)
 		pbStat = WinMedia::MediaPlaybackStatus_Paused;
 	else
 		pbStat = WinMedia::MediaPlaybackStatus_Playing;
+	
 	HRESULT hRes = mSMTCtrl->put_PlaybackStatus(pbStat);
 	if (! SUCCEEDED(hRes))
-		printf("Error setting SMTC playback state!");
+		printf("SMTC: Error setting playback state!");
 	
 	return;
 }
 
-static bool InitDisplayAndControls()
+static bool InitDisplayAndControls(void)
 {
 	HRESULT hRes;
-	Microsoft::WRL::ComPtr<ISystemMediaTransportControlsInterop> interop;
+	MsWRL::ComPtr<ISystemMediaTransportControlsInterop> interop;
 	
 	hRes = WinFoundation::GetActivationFactory(
-		Microsoft::WRL::Wrappers::HStringReference(RuntimeClass_WinMedia_SMTC).Get(),
+		MsWRL::Wrappers::HStringReference(RuntimeClass_WinMedia_SMTC).Get(),
 		interop.GetAddressOf());
 	if (FAILED(hRes))
 	{
@@ -160,8 +181,8 @@ static bool RegisterEvents(void)
 	if (! mSMTCtrl)
 		return true;
 	
-	Microsoft::WRL::ComPtr<SMTC_ButtonPressEvt_Callback> callbackbtnPressed =
-		Microsoft::WRL::Callback<SMTC_ButtonPressEvt_Callback>(ButtonCallback);
+	MsWRL::ComPtr<SMTC_ButtonPressEvt_Callback> callbackbtnPressed =
+		MsWRL::Callback<SMTC_ButtonPressEvt_Callback>(ButtonCallback);
 	HRESULT hRes = mSMTCtrl->add_ButtonPressed(callbackbtnPressed.Get(), &mBtnPressEvt);
 	if (FAILED(hRes))
 	{
@@ -180,6 +201,7 @@ static void UnregisterEvents(void)
 		mSMTCtrl->remove_ButtonPressed(mBtnPressEvt);
 	return;
 }
+
 
 static wchar_t* StrUTF8toUTF16(const char* strUTF8)
 {
@@ -202,7 +224,7 @@ static wchar_t* StrUTF8toUTF16(const char* strUTF8)
 static void SetMetadata(void)
 {
 	HRESULT hRes;
-	Microsoft::WRL::ComPtr<WinMedia::IMusicDisplayProperties> musicProps;
+	MsWRL::ComPtr<WinMedia::IMusicDisplayProperties> musicProps;
 	
 	mDispUpd->put_Type(WinMedia::MediaPlaybackType::MediaPlaybackType_Music);
 	hRes = mDispUpd->get_MusicProperties(musicProps.GetAddressOf());
@@ -216,13 +238,13 @@ static void SetMetadata(void)
 	wchar_t* titleWStr = StrUTF8toUTF16(mInf->GetSongTagForDisp("TITLE"));
 	wchar_t* albumWStr = StrUTF8toUTF16(mInf->GetSongTagForDisp("GAME"));
 	
-	hRes = musicProps->put_Artist(Microsoft::WRL::Wrappers::HStringReference(artistWStr).Get());
+	hRes = musicProps->put_Artist(MsWRL::Wrappers::HStringReference(artistWStr).Get());
 	if (FAILED(hRes))
 		printf("SMTC: Failed to set artist\n");
-	hRes = musicProps->put_Title(Microsoft::WRL::Wrappers::HStringReference(titleWStr).Get());
+	hRes = musicProps->put_Title(MsWRL::Wrappers::HStringReference(titleWStr).Get());
 	if (FAILED(hRes))
 		printf("SMTC: Failed to set title\n");
-	hRes = musicProps->put_AlbumArtist(Microsoft::WRL::Wrappers::HStringReference(albumWStr).Get());
+	hRes = musicProps->put_AlbumArtist(MsWRL::Wrappers::HStringReference(albumWStr).Get());
 	if (FAILED(hRes))
 		printf("SMTC: Failed to set album\n");
 	
@@ -240,16 +262,59 @@ static void SetMetadata(void)
 	return;
 }
 
+
+static void CancelAsync(void)
+{
+	if (! mSFileAsyncOp)
+		return;
+	
+	HRESULT hRes;
+	IAsyncInfo* asyncInfo;
+	hRes = mSFileAsyncOp->QueryInterface(IID_IAsyncInfo, reinterpret_cast<void**>(&asyncInfo));
+	if (FAILED(hRes))
+		return;
+	asyncInfo->Cancel();
+	mThumbPathWIP = std::string();
+	
+	return;
+}
+
 static void ClearThumbnail()
 {
 	if (mDispUpd == NULL)
 		return;
 	
+	CancelAsync();
 	mDispUpd->put_Thumbnail(nullptr);
 	mLastThumbPath = std::string();
 	mDispUpd->Update();
 	
 	return;
+}
+
+static HRESULT StorageFileAsyncCallback(WinFoundation::IAsyncOperation<WinStrg::StorageFile*>* aAsyncOp, AsyncStatus aStatus)
+{
+	if (aStatus != AsyncStatus::Completed)
+		return E_ABORT;	// we only want completed operations
+	
+	HRESULT hRes;
+	IAsyncInfo* asyncInfo;
+	hRes = aAsyncOp->QueryInterface(IID_IAsyncInfo, reinterpret_cast<void**>(&asyncInfo));
+	if (FAILED(hRes))
+		return hRes;	// failed to get asyncInfo
+
+	hRes = S_OK;
+	asyncInfo->get_ErrorCode(&hRes);
+	if (FAILED(hRes))
+		return hRes;	// async operation failed
+	
+	MsWRL::ComPtr<WinStrg::IStorageFile> mThumbISF;
+	hRes = aAsyncOp->GetResults(mThumbISF.GetAddressOf());
+	if (FAILED(hRes))
+		return hRes;	// async operation failed
+	
+	SetThumbnail_Exec(mThumbISF);
+	return S_OK;
 }
 
 static void SetThumbnail(const std::string& filePath)
@@ -259,17 +324,47 @@ static void SetThumbnail(const std::string& filePath)
 	if (mLastThumbPath == filePath)
 		return;
 	
-	if (filePath.empty() || true)
+	if (filePath.empty())
 	{
 		ClearThumbnail();
 		return;
 	}
 	
+	CancelAsync();
+	mThumbPathWIP = filePath;
+	mLastThumbPath = std::string();
+	
+	wchar_t* thumbPathW = StrUTF8toUTF16(mThumbPathWIP.c_str());
+	
+	MsWRL::ComPtr<WinStrg::IStorageFileStatics> strgFileStatic;
+	HRESULT hRes = WinFoundation::GetActivationFactory(
+		MsWRL::Wrappers::HStringReference(RuntimeClass_Windows_Storage_StorageFile).Get(),
+		strgFileStatic.GetAddressOf());
+	
+	// soooo much boilerplate code just to get the StorageFile object ...
+	hRes = strgFileStatic->GetFileFromPathAsync(MsWRL::Wrappers::HStringReference(thumbPathW).Get(), &mSFileAsyncOp);
+	free(thumbPathW);
+	if (FAILED(hRes))
+	{
+		printf("SMTC: GetFileFromPathAsync failed!\n");
+		return;
+	}
+	
+	auto asyncHandler = MsWRL::Callback<WinFoundation::IAsyncOperationCompletedHandler<WinStrg::StorageFile*>>(StorageFileAsyncCallback);
+	hRes = mSFileAsyncOp->put_Completed(asyncHandler.Get());
+	if (FAILED(hRes))
+		return;
+	
+	return;
+}
+
+static void SetThumbnail_Exec(MsWRL::ComPtr<WinStrg::IStorageFile> thumbISF)
+{
 	HRESULT hRes;
-	Microsoft::WRL::ComPtr<WinStrgStrm::IRandomAccessStreamReferenceStatics> streamRefFactory;
+	MsWRL::ComPtr<WinStrgStrm::IRandomAccessStreamReferenceStatics> streamRefFactory;
 	
 	hRes = WinFoundation::GetActivationFactory(
-		Microsoft::WRL::Wrappers::HStringReference(RuntimeClass_WinStrgStrm_RandAccStreamRef).Get(),
+		MsWRL::Wrappers::HStringReference(RuntimeClass_WinStrgStrm_RandAccStreamRef).Get(),
 		streamRefFactory.GetAddressOf());
 	if (FAILED(hRes))
 	{
@@ -277,10 +372,8 @@ static void SetThumbnail(const std::string& filePath)
 		return;
 	}
 	
-	Microsoft::WRL::ComPtr<ABI::Windows::Storage::IStorageFile> file;
-	// TODO: use StorageFile.GetFileFromPathAsync(filePath) here to get "file"
-	
-	hRes = streamRefFactory->CreateFromFile(file.Get(), mImgStrmRef.GetAddressOf());
+	MsWRL::ComPtr<WinStrgStrm::IRandomAccessStreamReference> mImgStrmRef;
+	hRes = streamRefFactory->CreateFromFile(thumbISF.Get(), mImgStrmRef.GetAddressOf());
 	if (FAILED(hRes))
 	{
 		printf("SMTC: Failed to create ImageStreamReference!\n");
@@ -293,7 +386,6 @@ static void SetThumbnail(const std::string& filePath)
 		printf("SMTC: Failed to set thumbnail\n");
 		return;
 	}
-	mLastThumbPath = filePath;
 	
 	hRes = mDispUpd->Update();
 	if (FAILED(hRes))
@@ -302,7 +394,8 @@ static void SetThumbnail(const std::string& filePath)
 		return;
 	}
 	
-	//mThumbnailUrl = aUrl;
+	mLastThumbPath = mThumbPathWIP;
+	mThumbPathWIP = std::string();
 	
 	return;
 }
@@ -388,9 +481,12 @@ void MediaControl::SignalHandler(UINT8 signalMask)
 		SetMetadata();
 		SetThumbnail(mInf->_albumImgPath);
 	}
+	
 	if (signalMask & (MI_SIG_NEW_SONG | MI_SIG_PLAY_STATE))
 		RefreshPlaybackState();
-	//if (signalMask & MI_SIG_POSITION)
-	//if (signalMask & MI_SIG_VOLUME)
+	
+	//if (signalMask & MI_SIG_POSITION) ;
+	//if (signalMask & MI_SIG_VOLUME) ;
+	
 	return;
 }
