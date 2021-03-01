@@ -16,6 +16,7 @@
 #include <player/playera.hpp>
 #include <emu/SoundDevs.h>
 #include <emu/SoundEmu.h>	// for SndEmu_GetDevName()
+#include <utils/StrUtils.h>
 
 #include "utils.hpp"
 #include "mediainfo.hpp"
@@ -25,6 +26,24 @@
 static void Tags_LangFilter(std::map<std::string, std::string>& tags, const std::string& tagName,
 	const std::vector<std::string>& langPostfixes, int defaultLang);
 static inline std::string FCC2Str(UINT32 fcc);
+
+MediaInfo::MediaInfo()
+{
+#ifdef _WIN32
+	_cpcUTF8toAPI = NULL;
+	_cpcAPItoUTF8 = NULL;
+	CPConv_Init(&_cpcUTF8toAPI, "UTF-8", "UTF-16LE");
+	CPConv_Init(&_cpcAPItoUTF8, "UTF-16LE", "UTF-8");
+#endif
+}
+
+MediaInfo::~MediaInfo()
+{
+#ifdef _WIN32
+	CPConv_Deinit(_cpcUTF8toAPI);
+	CPConv_Deinit(_cpcAPItoUTF8);
+#endif
+}
 
 void MediaInfo::PreparePlayback(void)
 {
@@ -125,7 +144,7 @@ static void Tags_LangFilter(std::map<std::string, std::string>& tags, const std:
 	{
 		if (*ltIt == tagName)
 			continue;
-		tags.erase(*ltIt);	// TODO: iterator handling
+		tags.erase(*ltIt);
 	}
 	
 	return;
@@ -202,9 +221,42 @@ void MediaInfo::EnumerateChips(void)
 	return;
 }
 
-static inline bool FileExists(const char* file)
+std::wstring MediaInfo::CharConv_UTF8toAPI(const std::string& textU8)
 {
-	FILE* fp = fopen(file, "rb");
+	size_t textWLen = 0;
+	wchar_t* textWStr = NULL;
+	UINT8 retVal = CPConv_StrConvert(_cpcUTF8toAPI, &textWLen, reinterpret_cast<char**>(&textWStr),
+		textU8.length(), textU8.c_str());
+	
+	std::wstring result;
+	if (retVal < 0x80)
+		result.assign(textWStr, textWStr + textWLen / sizeof(wchar_t));
+	free(textWStr);
+	return result;
+}
+
+std::string MediaInfo::CharConv_APItoUTF8(const std::wstring& textW)
+{
+	size_t textU8Len = 0;
+	char* textU8Str = NULL;
+	UINT8 retVal = CPConv_StrConvert(_cpcAPItoUTF8, &textU8Len, &textU8Str,
+		textW.length() * sizeof(wchar_t), reinterpret_cast<const char*>(textW.c_str()));
+	
+	std::string result;
+	if (retVal < 0x80)
+		result.assign(textU8Str, textU8Str + textU8Len);
+	free(textU8Str);
+	return result;
+}
+
+bool MediaInfo::FileExists(const std::string& fileName)
+{
+#ifdef _WIN32
+	std::wstring fileNameW = CharConv_UTF8toAPI(fileName);
+	FILE* fp = _wfopen(fileNameW.c_str(), L"rb");
+#else
+	FILE* fp = fopen(fileName.c_str(), "rb");
+#endif
 	if (fp == NULL)
 		return false;
 	fclose(fp);
@@ -231,7 +283,7 @@ void MediaInfo::SearchAlbumImage(void)
 #if DEBUG_ART_SEARCH
 		printf("Trying %s\n", imgPath.c_str());
 #endif
-		if (FileExists(imgPath.c_str()))
+		if (FileExists(imgPath))
 		{
 			_albumImgPath = imgPath;
 			return;
@@ -254,7 +306,7 @@ void MediaInfo::SearchAlbumImage(void)
 #if DEBUG_ART_SEARCH
 		printf("Trying %s\n", imgPath.c_str());
 #endif
-		if (FileExists(imgPath.c_str()))
+		if (FileExists(imgPath))
 		{
 			_albumImgPath = imgPath;
 			return;
@@ -265,17 +317,18 @@ void MediaInfo::SearchAlbumImage(void)
 	// Append the case insensitive extension to the base path.
 #ifdef _WIN32
 	{
-		// TODO: Use Unicode calls when possible.
-		//       Right now this goes very wrong with non-ASCII characters.
 		std::string pathPattern = basePath + "*.png";
 #if DEBUG_ART_SEARCH
 		printf("Using file search %s\n", pathPattern.c_str());
 #endif
-		WIN32_FIND_DATAA ffd;
-		HANDLE hFind = FindFirstFileA(pathPattern.c_str(), &ffd);
+		
+		std::wstring pathPatW = CharConv_UTF8toAPI(pathPattern);
+		WIN32_FIND_DATAW ffd;
+		HANDLE hFind = FindFirstFileW(pathPatW.c_str(), &ffd);
 		if (hFind != INVALID_HANDLE_VALUE)
 		{
-			_albumImgPath = CombinePaths(basePath, ffd.cFileName);
+			std::string fileNameU8 = CharConv_APItoUTF8(ffd.cFileName);
+			_albumImgPath = CombinePaths(basePath, fileNameU8);
 			FindClose(hFind);
 			return;
 		}

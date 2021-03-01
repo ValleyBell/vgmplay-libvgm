@@ -441,6 +441,11 @@ static void SetThumbnail(const std::string& filePath)
 	mLastThumbPath = std::string();
 	
 	wchar_t* thumbPathW = StrUTF8toUTF16(mThumbPathWIP.c_str());
+	if (thumbPathW == NULL)
+	{
+		printf("Unable to convert image filename from UTF-8 to UTF-16!\n");
+		return;
+	}
 	
 	MsWRL::ComPtr<WinStrg::IStorageFileStatics> strgFileStatic;
 	HRESULT hRes = WinFoundation::GetActivationFactory(

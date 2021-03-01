@@ -8,6 +8,7 @@
 
 #include <stdtype.h>
 #include <player/playera.hpp>
+#include <utils/StrUtils.h>
 #include "playcfg.hpp"
 
 #define MI_SIG_NEW_SONG		0x01	// triggered when a new song starts (-> metadata refresh)
@@ -38,6 +39,8 @@ typedef void (*MI_SIGNAL_CB)(MediaInfo* mInfo, void* userParam, UINT8 signalMask
 class MediaInfo
 {
 public:
+	MediaInfo();
+	~MediaInfo();
 	void PreparePlayback(void);
 	const char* GetSongTagForDisp(const std::string& tagName);
 	void EnumerateTags(void);	// implicitly called by PreparePlayback(), as that one may parse some of the tags
@@ -47,6 +50,14 @@ public:
 	void AddSignalCallback(MI_SIGNAL_CB func, void* param);
 	void Event(UINT8 evtType, INT32 evtParam);
 	void Signal(UINT8 signalMask);
+	
+private:
+#ifdef _WIN32
+	std::wstring CharConv_UTF8toAPI(const std::string& str);
+	std::string CharConv_APItoUTF8(const std::wstring& str);
+#endif
+	inline bool FileExists(const std::string& fileName);
+public:
 	
 	struct DeviceItem
 	{
@@ -89,6 +100,10 @@ public:
 	size_t _playlistTrkID;	// (size_t)-1 when not in a playlist
 	size_t _playlistTrkCnt;
 	std::string _albumImgPath;
+#ifdef _WIN32
+	CPCONV* _cpcUTF8toAPI;
+	CPCONV* _cpcAPItoUTF8;
+#endif
 	
 	std::vector<SignalHandler> _sigCb;
 	std::queue<EventData> _evtQueue;
