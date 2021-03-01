@@ -7,10 +7,15 @@
 #include <math.h>
 
 #ifdef _WIN32
+
 //#define _WIN32_WINNT	0x500	// for GetConsoleWindow()
 #include <windows.h>
 extern "C" int __cdecl _getch(void);	// from conio.h
 extern "C" int __cdecl _kbhit(void);
+#if _WIN32_WINNT >= 0x0603
+#include <wrl\wrappers\corewrappers.h>
+#endif
+
 #else
 #include <unistd.h>		// for STDIN_FILENO and usleep()
 #include <termios.h>
@@ -142,6 +147,12 @@ UINT8 PlayerMain(UINT8 showFileName)
 	GeneralOptions& genOpts = mediaInfo._genOpts;
 	UINT8 retVal;
 	UINT8 fnShowMode;
+	
+#if _WIN32_WINNT >= 0x0603
+	// The Windows Runtime (with COM) MUST be initialized before the audio API,
+	// which may initialize the COM library by itself and defaults to single-thread mode.
+	Microsoft::WRL::Wrappers::RoInitializeWrapper initialize(RO_INIT_MULTITHREADED);
+#endif
 	
 	if (songList.size() == 1 && songList[0].playlistID == (size_t)-1)
 		fnShowMode = showFileName ? 1 : 2;
