@@ -137,10 +137,16 @@ void ParseConfiguration(GeneralOptions& gOpts, size_t cOptCnt, ChipOptions* cOpt
 
 static inline UINT32 Str2FCC(const std::string& fcc)
 {
-	UINT8 buf[4];
-	strncpy((char*)buf, fcc.c_str(), 4);
-	return	(buf[0] << 24) | (buf[1] << 16) |
-			(buf[2] <<  8) | (buf[3] <<  0);
+	//UINT8 buf[4];
+	//strncpy((char*)buf, fcc.c_str(), 4);	// GCC throws Wstringop-truncation here
+	//return	(buf[0] << 24) | (buf[1] << 16) |
+	//		(buf[2] <<  8) | (buf[3] <<  0);
+	UINT32 fccVal = 0x00000000;
+	size_t copySize = (fcc.length() <= 4) ? fcc.length() : 4;
+	for (size_t chrPos = 0; chrPos < copySize; chrPos ++)
+		fccVal = (fccVal << 8) | fcc[chrPos];
+	fccVal <<= 8 * (4 - copySize);
+	return fccVal;
 }
 
 static inline std::string Cfg_GetStrOrDefault(const CfgSection::Unordered& ceList, const std::string& entryName, std::string defaultValue)

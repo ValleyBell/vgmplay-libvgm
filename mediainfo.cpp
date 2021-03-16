@@ -221,6 +221,7 @@ void MediaInfo::EnumerateChips(void)
 	return;
 }
 
+#ifdef _WIN32
 std::wstring MediaInfo::CharConv_UTF8toAPI(const std::string& textU8)
 {
 	size_t textWLen = 0;
@@ -248,6 +249,7 @@ std::string MediaInfo::CharConv_APItoUTF8(const std::wstring& textW)
 	free(textU8Str);
 	return result;
 }
+#endif
 
 bool MediaInfo::FileExists(const std::string& fileName)
 {
