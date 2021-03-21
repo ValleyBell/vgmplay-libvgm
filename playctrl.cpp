@@ -618,6 +618,7 @@ static UINT8 PlayFile(void)
 		
 		if (genOpts.fadeRawLogs && mediaInfo._isRawLog && genOpts.fadeTime_single > 0)
 		{
+			// TODO: Thread-safety
 			if (! (mediaInfo._playState & PLAYSTATE_PAUSE) && ! (myPlayer.GetState() & PLAYSTATE_FADE))
 			{
 				double fadeStart = myPlayer.GetTotalTime(1) - genOpts.fadeTime_single / 1500.0;

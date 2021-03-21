@@ -48,6 +48,7 @@ public:
 	void SearchAlbumImage(void);
 	
 	void AddSignalCallback(MI_SIGNAL_CB func, void* param);
+	void RemoveSignalCallback(MI_SIGNAL_CB func, void* param);	// TODO
 	void Event(UINT8 evtType, INT32 evtParam);
 	void Signal(UINT8 signalMask);
 	

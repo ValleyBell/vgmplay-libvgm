@@ -1,3 +1,13 @@
+VGMPlay v0.50.2
+---------------
+* fixed broken FM3 multi-frequency mode in YM2612 GPGX core (the default core)
+* fixed audio glitches at the beginning of certain VGMs from Project2612 (i.e. I made a hack to the YM2612 GPGX core)
++ added support for playback control via media keys on Windows
++ added MPRIS/DBus support on Linux (supports media keys, track information, etc.)
+* fixed setting Windows console title (broken since 0.50.1)
++ added support for Windows 10 media control (showing track title / album art)
+* updated Pokey MAME sound core (thanks jprjr)
+
 VGMPlay v0.50.1
 ---------------
 * fixed loading songs with non-ASCII file names under Windows

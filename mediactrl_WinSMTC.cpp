@@ -562,6 +562,7 @@ void MediaControl::Deinit(void)
 	if (! mSMTCtrl)
 		return;
 	
+	mInf->RemoveSignalCallback(&MediaControl::SignalCB, this);
 	mSMTCtrl->put_PlaybackStatus(WinMedia::MediaPlaybackStatus_Closed);
 	UnregisterEvents();
 	ClearThumbnail();

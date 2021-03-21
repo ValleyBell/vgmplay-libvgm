@@ -985,6 +985,7 @@ UINT8 MediaControl::Init(MediaInfo& mediaInfo)
 
 void MediaControl::Deinit(void)
 {
+	mInf->RemoveSignalCallback(&MediaControl::SignalCB, this);
 	dbThrStop = true;
 	if (dbusThr != NULL)
 	{
