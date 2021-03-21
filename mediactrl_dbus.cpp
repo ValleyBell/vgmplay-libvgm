@@ -20,6 +20,7 @@ They weren't lying when they said that using libdbus directly signs you up for s
 
 #include <stdtype.h>
 #include <player/playera.hpp>
+#include <utils/OSThread.h>
 #include "utils.hpp"
 #include "mediainfo.hpp"
 #include "mediactrl.hpp"
@@ -53,6 +54,8 @@ typedef struct DBusMetadata_
 #define SIGNAL_VOLUME      0x20 // Volume needs to be updated
 #define SIGNAL_ALL         0xFF // All Signals
 
+static OS_THREAD* dbusThr;
+static volatile bool dbThrStop;
 static DBusConnection* connection = NULL;
 
 static MediaInfo* mInf = NULL;
@@ -938,10 +941,18 @@ static DBusHandlerResult DBusHandler(DBusConnection* connection, DBusMessage* me
 	}
 }
 
+static void DispatchThread(void* args)
+{
+	while(! dbThrStop && dbus_connection_read_write_dispatch(connection, 100))
+		;
+}
+
 UINT8 MediaControl::Init(MediaInfo& mediaInfo)
 {
 	mInf = &mediaInfo;
 	mInf->_enableAlbumImage = true;
+
+	dbus_threads_init_default();
 
 	connection = dbus_bus_get(DBUS_BUS_SESSION, NULL);
 	if(!connection)
@@ -962,7 +973,11 @@ UINT8 MediaControl::Init(MediaInfo& mediaInfo)
 	};
 
 	dbus_connection_try_register_object_path(connection, DBUS_MPRIS_PATH, &vtable, NULL, NULL);
-	
+
+	dbusThr = NULL;
+	dbThrStop = false;
+	OSThread_Init(&dbusThr, DispatchThread, NULL);
+
 	mInf->AddSignalCallback(&MediaControl::SignalCB, this);
 
 	return 0x00;
@@ -970,17 +985,23 @@ UINT8 MediaControl::Init(MediaInfo& mediaInfo)
 
 void MediaControl::Deinit(void)
 {
+	dbThrStop = true;
+	if (dbusThr != NULL)
+	{
+		OSThread_Join(dbusThr);
+		OSThread_Deinit(dbusThr);
+		dbusThr = NULL;
+	}
 	if(connection != NULL)
+	{
 		dbus_connection_unref(connection);
+		connection = NULL;
+	}
+	dbus_shutdown();
 }
 
 void MediaControl::ReadWriteDispatch(void)
 {
-	if(connection == NULL)
-		return;
-
-	// Wait at most for 1ms
-	dbus_connection_read_write_dispatch(connection, 1);
 }
 
 /*static*/ void MediaControl::SignalCB(MediaInfo* mInfo, void* userParam, UINT8 signalMask)
