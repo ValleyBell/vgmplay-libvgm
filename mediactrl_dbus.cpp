@@ -1000,10 +1000,6 @@ void MediaControl::Deinit(void)
 	dbus_shutdown();
 }
 
-void MediaControl::ReadWriteDispatch(void)
-{
-}
-
 /*static*/ void MediaControl::SignalCB(MediaInfo* mInfo, void* userParam, UINT8 signalMask)
 {
 	MediaControl* obj = static_cast<MediaControl*>(userParam);

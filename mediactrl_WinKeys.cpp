@@ -99,11 +99,6 @@ void MediaControl::Deinit(void)
 	return;
 }
 
-void MediaControl::ReadWriteDispatch(void)
-{
-	return;
-}
-
 /*static*/ void MediaControl::SignalCB(MediaInfo* mInfo, void* userParam, UINT8 signalMask)
 {
 	MediaControl* obj = static_cast<MediaControl*>(userParam);

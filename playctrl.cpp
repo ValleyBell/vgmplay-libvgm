@@ -601,7 +601,6 @@ static UINT8 PlayFile(void)
 			Sleep(50);
 		}
 		
-		mediaCtrl.ReadWriteDispatch();
 		HandleKeyPress(false);
 		retVal = 0x00;
 		if (! mediaInfo._evtQueue.empty())	// TODO: thread-safety
