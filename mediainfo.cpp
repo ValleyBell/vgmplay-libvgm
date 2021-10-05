@@ -369,6 +369,20 @@ void MediaInfo::AddSignalCallback(MI_SIGNAL_CB func, void* param)
 	return;
 }
 
+void MediaInfo::RemoveSignalCallback(MI_SIGNAL_CB func, void* param)
+{
+	std::vector<SignalHandler>::iterator scbIt;
+	for (scbIt = _sigCb.begin(); scbIt != _sigCb.end(); ++scbIt)
+	{
+		if (scbIt->func == func && scbIt->param == param)
+		{
+			_sigCb.erase(scbIt);
+			break;
+		}
+	}
+	return;
+}
+
 void MediaInfo::Event(UINT8 evtType, INT32 evtParam)
 {
 	EventData ed = {evtType, evtParam};
