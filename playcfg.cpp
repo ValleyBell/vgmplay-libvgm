@@ -632,7 +632,7 @@ static void ParseCfg_ChipSection(ChipOptions& opts, const CfgSection& cfg, UINT8
 		opts.addOpts  = (Cfg_GetUIntOrDefault(ceuList, "SharedOpts", 0x03) & 0x03) << 0;
 		opts.addOpts |= (Cfg_GetUIntOrDefault(ceuList, "APUOpts", 0x01) & 0x03) << 2;
 		opts.addOpts |= (Cfg_GetUIntOrDefault(ceuList, "DMCOpts", 0x3B) & 0x3F) << 4;
-		opts.addOpts |= (Cfg_GetUIntOrDefault(ceuList, "FDSOpts", 0x03) & 0x03) << 10;
+		opts.addOpts |= (Cfg_GetUIntOrDefault(ceuList, "FDSOpts", 0x00) & 0x03) << 10;
 		break;
 	case DEVID_OKIM6258:
 		opts.addOpts = Cfg_GetBoolOrDefault(ceuList, "Enable10Bit", false) ? 0x00 : OPT_OKIM6258_FORCE_12BIT;
