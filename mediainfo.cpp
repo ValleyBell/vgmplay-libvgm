@@ -54,11 +54,11 @@ void MediaInfo::PreparePlayback(void)
 	EnumerateTags();	// must be done before PreparePlayback(), as it may parse some of the tags
 	
 	player->GetSongInfo(sInf);
-	_volGain = 1.0;
 	// Note: sInf.loopTick is -1 for non-looping songs. player->GetLoopTicks() returns 0 that case.
 	_looping = (sInf.loopTick != (UINT32)-1);
 	_fileFmt = player->GetPlayerName();
 	_fileVerNum = (sInf.fileVerMaj << 8) | (sInf.fileVerMin << 0);
+	_volGain = sInf.volGain / (double)0x10000;
 	_isRawLog = false;
 	if (player->GetPlayerType() == FCC_VGM)
 	{
@@ -69,7 +69,6 @@ void MediaInfo::PreparePlayback(void)
 		
 		_fileEndPos = vgmhdr->dataEnd;
 		_fileStartPos = vgmhdr->dataOfs;
-		_volGain = pow(2.0, vgmhdr->volumeGain / (double)0x100);
 		
 		// RAW Log: no loop, no/empty Creator tag, no Title tag
 		if (! vgmhdr->loopOfs && _songTags.find("ENCODED_BY") == _songTags.end() &&

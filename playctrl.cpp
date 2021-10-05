@@ -420,8 +420,11 @@ static void PreparePlayback(void)
 	const GeneralOptions& genOpts = mediaInfo._genOpts;
 	UINT32 timeMS;
 	
-	INT32 volume = (INT32)(0x10000 * mediaInfo._volGain * genOpts.volume + 0.5);
-	myPlayer.SetMasterVolume(volume);
+	if (myPlayer.GetPlayer()->GetPlayerType() == FCC_VGM)
+	{
+		VGMPlayer* vgmplay = dynamic_cast<VGMPlayer*>(myPlayer.GetPlayer());
+		myPlayer.SetLoopCount(vgmplay->GetModifiedLoopCount(genOpts.maxLoops));
+	}
 	
 	// last song: fadeTime_single, others: fadeTime_plist
 	timeMS = (curSong + 1 == songList.size()) ? genOpts.fadeTime_single : genOpts.fadeTime_plist;

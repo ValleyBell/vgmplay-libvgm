@@ -7,6 +7,11 @@ VGMPlay v0.50.2
 * fixed setting Windows console title (broken since 0.50.1)
 + added support for Windows 10 media control (showing track title / album art)
 * updated Pokey MAME sound core (thanks jprjr)
+* fixed some crashes with broken VGMs
+* improved S98 Delta-T sample playback
+* ported YM2612 Genesis GX FM emulation back to YM2203/YM2608/YM2610
+* fix VGMPlay ignoring the VGM "Loop Modifer" and "Loop Base" settings
+* updated C6280 Ootake and MAME cores, fixes PC-Engine "Fire Pro Wrestling" series
 
 VGMPlay v0.50.1
 ---------------
