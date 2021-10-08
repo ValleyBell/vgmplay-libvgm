@@ -554,6 +554,13 @@ static UINT8 PlayFile(void)
 	UINT8 retVal;
 	bool needRefresh;
 	
+	const std::vector<VGMPlayer::DACSTRM_DEV>* vgmPcmStrms = NULL;
+	if (myPlayer.GetPlayer()->GetPlayerType() == FCC_VGM)
+	{
+		VGMPlayer* vgmplay = dynamic_cast<VGMPlayer*>(myPlayer.GetPlayer());
+		vgmPcmStrms = &vgmplay->GetStreamDevInfo();
+	}
+	
 	if (adOut.data != NULL)
 		retVal = AudioDrv_SetCallback(adOut.data, FillBuffer, &myPlayer);
 	else
@@ -583,10 +590,35 @@ static UINT8 PlayFile(void)
 			UINT32 dataPos = myPlayer.GetCurPos(PLAYPOS_FILEOFS);
 			dataPos = (dataPos >= mediaInfo._fileStartPos) ? (dataPos - mediaInfo._fileStartPos) : 0x00;
 			
-			printf("%s%6.2f%%  %s / %s seconds  \r", pState,
+			if (vgmPcmStrms == NULL || vgmPcmStrms->empty())
+			{
+				printf("%s%6.2f%%  %s / %s seconds  \r", pState,
 					100.0 * dataPos / dataLen,
 					GetTimeStr(myPlayer.GetCurTime(0), timeDispMode).c_str(),
 					GetTimeStr(myPlayer.GetTotalTime(0), timeDispMode).c_str());
+			}
+			else
+			{
+				const VGMPlayer::DACSTRM_DEV* strmDev = &(*vgmPcmStrms)[0];
+				std::string pbMode;
+				if (strmDev->pbMode & 0x10)
+					pbMode += 'R';	// reverse playback
+				if (strmDev->pbMode & 0x80)
+					pbMode += 'L';	// looping
+				printf("%s%6.2f%%  %s / %s seconds", pState,
+					100.0 * dataPos / dataLen,
+					GetTimeStr(myPlayer.GetCurTime(0), timeDispMode).c_str(),
+					GetTimeStr(myPlayer.GetTotalTime(0), timeDispMode).c_str());
+				if (genOpts.showStrmCmds == 0x01)
+					printf("  %02X / %02X %s", 1 + strmDev->lastItem, strmDev->maxItems, pbMode.c_str());
+				else if (genOpts.showStrmCmds == 0x02)
+					printf("  %02X / %02X at %5u Hz %s", 1 + strmDev->lastItem, strmDev->maxItems,
+						strmDev->freq, pbMode.c_str());
+				else if (genOpts.showStrmCmds == 0x03)
+					printf("  %02X / %02X at %4.1f KHz %s", 1 + strmDev->lastItem, strmDev->maxItems,
+						strmDev->freq / 1000.0, pbMode.c_str());
+				printf("  \r");
+			}
 			fflush(stdout);
 			needRefresh = false;
 		}
