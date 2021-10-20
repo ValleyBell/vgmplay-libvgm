@@ -1,3 +1,4 @@
+#define _USE_MATH_DEFINES
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
@@ -135,6 +136,8 @@ static size_t curSong;
 
 static MediaInfo mediaInfo;
 static MediaControl mediaCtrl;
+static INT32 masterVol;
+static INT32 noDispTime;
 
 static inline UINT32 MSec2Samples(UINT32 val, const PlayerA& player)
 {
@@ -212,6 +215,7 @@ UINT8 PlayerMain(UINT8 showFileName)
 		ApplyCfg_Chip(myPlayer, genOpts, cOpt);
 	}
 	mediaInfo._pbSongCnt = songList.size();
+	masterVol = myPlayer.GetMasterVolume();
 	
 	mediaInfo._enableAlbumImage = false;	// disable by default, MediaCtrl objects will enable it on demand
 	//mediaInfo.AddSignalCallback(SignalCB, NULL);
@@ -568,10 +572,11 @@ static UINT8 PlayFile(void)
 	manualRenderLoop = (retVal != AERR_OK);
 	controlVal = 0;
 	mediaInfo._playState &= ~PLAYSTATE_END;
+	noDispTime = 0;
 	needRefresh = true;
 	while(! (mediaInfo._playState & PLAYSTATE_END))
 	{
-		if (! (mediaInfo._playState & PLAYSTATE_PAUSE))
+		if (! (mediaInfo._playState & PLAYSTATE_PAUSE) && noDispTime <= 0)
 			needRefresh = true;	// always update when playing
 		if (needRefresh)
 		{
@@ -621,6 +626,7 @@ static UINT8 PlayFile(void)
 			}
 			fflush(stdout);
 			needRefresh = false;
+			noDispTime = 0;
 		}
 		
 		if (manualRenderLoop && ! (mediaInfo._playState & PLAYSTATE_PAUSE))
@@ -630,10 +636,14 @@ static UINT8 PlayFile(void)
 				AudioDrv_WriteData(adOut.data, wrtBytes, &audioBuf[0]);
 			else if (adLog.data != NULL)
 				AudioDrv_WriteData(adLog.data, wrtBytes, &audioBuf[0]);
+			if (noDispTime > 0)
+				noDispTime -= 200;
 		}
 		else
 		{
 			Sleep(50);
+			if (noDispTime > 0)
+				noDispTime -= 50;
 		}
 		
 		HandleKeyPress(false);
@@ -827,6 +837,38 @@ static UINT8 HandleCtrlEvent(UINT8 evtType, INT32 evtParam)
 			mediaInfo.Signal(MI_SIG_POSITION);
 		}
 		return 0x01;
+	case MI_EVT_VOL_SET:
+		masterVol = evtParam;
+		OSMutex_Lock(renderMtx);
+		mediaInfo._player.SetMasterVolume(masterVol);
+		OSMutex_Unlock(renderMtx);
+		{
+			double vol = masterVol / (double)0x10000;
+			double volDB = log(vol) / M_LN2 * 6.0;
+			printf("Volume: %.3f (%+5.1f db)%19s    \r", vol, volDB, "");
+			noDispTime = 1000;
+		}
+		break;
+	case MI_EVT_VOL_CHG:
+		{
+			double vol = masterVol / (double)0x10000;
+			vol *= pow(2.0, evtParam / 10.0);
+			masterVol = (INT32)(vol * 0x10000 + 0.5);
+			if (masterVol < 0x0800)	// 1.0/32 = -30 db
+				masterVol = 0x0800;
+			else if (masterVol > 0x200000)	// 1.0*32 = +30 db
+				masterVol = 0x200000;
+		}
+		OSMutex_Lock(renderMtx);
+		mediaInfo._player.SetMasterVolume(masterVol);
+		OSMutex_Unlock(renderMtx);
+		{
+			double vol = masterVol / (double)0x10000;
+			double volDB = log(vol) / M_LN2 * 6.0;
+			printf("Volume: %.3f (%+5.1f db)%19s    \r", vol, volDB, "");
+			noDispTime = 1000;
+		}
+		break;
 	}
 	
 	return 0x00;
@@ -990,6 +1032,17 @@ static UINT8 HandleKeyPress(bool waitForKey)
 	case 'N':	// next file
 	case KEY_NPAGE:
 		mediaInfo.Event(MI_EVT_PLIST, MIE_PL_NEXT);
+		break;
+	case KEY_UP:
+	case KEY_DOWN:
+	case KEY_CTRL | KEY_UP:
+	case KEY_CTRL | KEY_DOWN:
+		{
+			INT32 amount = (keyCode & KEY_CTRL) ? 10 : 1;
+			if ((keyCode & KEY_MASK) == KEY_DOWN)
+				amount *= -1;	// seek back
+			mediaInfo.Event(MI_EVT_VOL_CHG, amount);
+		}
 		break;
 	default:
 		if (keyCode >= '0' && keyCode <= '9')

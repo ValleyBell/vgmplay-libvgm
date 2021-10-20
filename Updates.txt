@@ -14,6 +14,7 @@ VGMPlay v0.50.2
 * updated C6280 Ootake and MAME cores, fixes PC-Engine "Fire Pro Wrestling" series
 * fixed wrong default options that caused NES FDS to be muted
 + restored ShowStreamCmds option
++ added volume control via Cursor Up/Down
 
 
 VGMPlay v0.50.1

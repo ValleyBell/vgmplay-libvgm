@@ -32,6 +32,8 @@
 #define MI_EVT_SEEK_REL		0x10	// relative seeking (in samples)
 #define MI_EVT_SEEK_ABS		0x11	// absolute seeking (in samples)
 #define MI_EVT_SEEK_PERC	0x12	// absolute seeking (in percent)
+#define MI_EVT_VOL_SET		0x20
+#define MI_EVT_VOL_CHG		0x21
 
 class MediaInfo;
 typedef void (*MI_SIGNAL_CB)(MediaInfo* mInfo, void* userParam, UINT8 signalMask);
