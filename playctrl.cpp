@@ -719,10 +719,27 @@ static UINT8 HandleCtrlEvent(UINT8 evtType, INT32 evtParam)
 		switch(evtParam)
 		{
 		case MIE_CTRL_START:	// start
-			break;	// not implemented
+			if (! (mediaInfo._playState & PLAYSTATE_PLAY))
+				break;
+			OSMutex_Lock(renderMtx);
+			mediaInfo._playState &= ~PLAYSTATE_PAUSE;
+			OSMutex_Unlock(renderMtx);
+			if (adOut.data != NULL)
+				AudioDrv_Resume(adOut.data);
+			mediaInfo.Signal(MI_SIG_PLAY_STATE);
+			return 0x01;
 		case MIE_CTRL_STOP:	// stop
+			if (! (mediaInfo._playState & PLAYSTATE_PLAY))
+				break;
+			OSMutex_Lock(renderMtx);
+			mediaInfo._playState |= PLAYSTATE_PAUSE;
+			myPlayer.Reset();
+			OSMutex_Unlock(renderMtx);
+			if (adOut.data != NULL)
+				AudioDrv_Pause(adOut.data);
+			mediaInfo.Signal(MI_SIG_POSITION | MI_SIG_PLAY_STATE);
+			return 0x01;
 			//return 0x10;
-			break;	// not implemented
 		case MIE_CTRL_RESTART:	// restart
 			if (! (mediaInfo._playState & PLAYSTATE_PLAY))
 				break;

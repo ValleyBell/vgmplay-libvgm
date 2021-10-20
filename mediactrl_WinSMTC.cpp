@@ -98,7 +98,7 @@ static UINT8 HandleMediaKeyPress(WinMedia::SystemMediaTransportControlsButton ke
 	switch(keycode)
 	{
 	case WinMedia::SystemMediaTransportControlsButton_Play:
-		mInf->Event(MI_EVT_PAUSE, MIE_PS_TOGGLE);
+		mInf->Event(MI_EVT_PAUSE, MIE_PS_RESUME);
 		return 0;
 	case WinMedia::SystemMediaTransportControlsButton_Pause:
 		mInf->Event(MI_EVT_PAUSE, MIE_PS_TOGGLE);
@@ -466,7 +466,7 @@ static void SetThumbnail(const std::string& filePath)
 		return;
 	}
 	
-	auto asyncHandler = MsWRL::Callback<WinFoundation::IAsyncOperationCompletedHandler<WinStrg::StorageFile*>>(StorageFileAsyncCallback);
+	auto asyncHandler = MsWRL::Callback< WinFoundation::IAsyncOperationCompletedHandler<WinStrg::StorageFile*> >(StorageFileAsyncCallback);
 	hRes = mSFileAsyncOp->put_Completed(asyncHandler.Get());
 	if (FAILED(hRes))
 		return;
@@ -542,6 +542,7 @@ UINT8 MediaControl::Init(MediaInfo& mediaInfo)
 	if (retVal & 0x80)
 		cpcU8_Wide = NULL;
 	
+	mSMTCtrl->put_IsStopEnabled(true);
 	mSMTCtrl->put_IsPlayEnabled(true);
 	mSMTCtrl->put_IsPauseEnabled(true);
 	mSMTCtrl->put_IsPreviousEnabled(false);
