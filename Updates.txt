@@ -15,6 +15,7 @@ VGMPlay v0.50.2
 * fixed wrong default options that caused NES FDS to be muted
 + restored ShowStreamCmds option
 + added volume control via Cursor Up/Down
++ added option to pause (Ctrl + P) or quit (Ctrl + X) after the current track
 
 
 VGMPlay v0.50.1

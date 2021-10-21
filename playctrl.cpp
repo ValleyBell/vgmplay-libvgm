@@ -138,6 +138,8 @@ static MediaInfo mediaInfo;
 static MediaControl mediaCtrl;
 static INT32 masterVol;
 static INT32 noDispTime;
+static bool pauseAfterEnd;
+static bool quitAfterEnd;
 
 static inline UINT32 MSec2Samples(UINT32 val, const PlayerA& player)
 {
@@ -558,6 +560,9 @@ static UINT8 PlayFile(void)
 	UINT8 retVal;
 	bool needRefresh;
 	
+	pauseAfterEnd = false;
+	quitAfterEnd = false;
+	
 	const std::vector<VGMPlayer::DACSTRM_DEV>* vgmPcmStrms = NULL;
 	if (myPlayer.GetPlayer()->GetPlayerType() == FCC_VGM)
 	{
@@ -571,7 +576,7 @@ static UINT8 PlayFile(void)
 		retVal = 0xFF;
 	manualRenderLoop = (retVal != AERR_OK);
 	controlVal = 0;
-	mediaInfo._playState &= ~PLAYSTATE_END;
+	mediaInfo._playState &= ~(PLAYSTATE_END | PLAYSTATE_FIN);
 	noDispTime = 0;
 	needRefresh = true;
 	while(! (mediaInfo._playState & PLAYSTATE_END))
@@ -637,13 +642,52 @@ static UINT8 PlayFile(void)
 			else if (adLog.data != NULL)
 				AudioDrv_WriteData(adLog.data, wrtBytes, &audioBuf[0]);
 			if (noDispTime > 0)
+			{
 				noDispTime -= 200;
+				if (noDispTime <= 0)
+					needRefresh = true;
+			}
 		}
 		else
 		{
 			Sleep(50);
 			if (noDispTime > 0)
+			{
 				noDispTime -= 50;
+				if (noDispTime <= 0)
+					needRefresh = true;
+			}
+		}
+		
+		if (genOpts.fadeRawLogs && mediaInfo._isRawLog && genOpts.fadeTime_single > 0)
+		{
+			// TODO: Thread-safety
+			if (! (mediaInfo._playState & PLAYSTATE_PAUSE) && ! (myPlayer.GetState() & PLAYSTATE_FADE))
+			{
+				double fadeStart = myPlayer.GetTotalTime(1) - genOpts.fadeTime_single / 1500.0;
+				if (myPlayer.GetCurTime(1) >= fadeStart)
+				{
+					myPlayer.SetFadeSamples(MSec2Samples(genOpts.fadeTime_single, myPlayer));
+					myPlayer.FadeOut();	// (FadeTime / 1500) ends at 33%
+				}
+			}
+		}
+		if (mediaInfo._playState & PLAYSTATE_FIN)
+		{
+			if (! (mediaInfo._playState & PLAYSTATE_PAUSE))
+			{
+				if (pauseAfterEnd)
+				{
+					mediaInfo.Event(MI_EVT_PAUSE, MIE_PS_PAUSE);
+					pauseAfterEnd = false;
+				}
+				else
+				{
+					mediaInfo._playState |= PLAYSTATE_END;
+				}
+			}
+			if (! (myPlayer.GetState() & PLAYSTATE_END))
+				mediaInfo._playState &= ~PLAYSTATE_FIN;	// remove "finished" flag when seeking back
 		}
 		
 		HandleKeyPress(false);
@@ -660,20 +704,6 @@ static UINT8 PlayFile(void)
 			if (retVal >= 0x10)
 				break;
 		}
-		
-		if (genOpts.fadeRawLogs && mediaInfo._isRawLog && genOpts.fadeTime_single > 0)
-		{
-			// TODO: Thread-safety
-			if (! (mediaInfo._playState & PLAYSTATE_PAUSE) && ! (myPlayer.GetState() & PLAYSTATE_FADE))
-			{
-				double fadeStart = myPlayer.GetTotalTime(1) - genOpts.fadeTime_single / 1500.0;
-				if (myPlayer.GetCurTime(1) >= fadeStart)
-				{
-					myPlayer.SetFadeSamples(MSec2Samples(genOpts.fadeTime_single, myPlayer));
-					myPlayer.FadeOut();	// (FadeTime / 1500) ends at 33%
-				}
-			}
-		}
 	}
 	// remove callback to prevent further rendering
 	// also waits for render thread to finish its work
@@ -687,7 +717,7 @@ static UINT8 PlayFile(void)
 	
 	if (! controlVal)
 	{
-		if (/*stopAfterSong*/false)
+		if (quitAfterEnd)
 			controlVal = 9;	// quit
 		else
 			controlVal = +1;	// finished normally - next song
@@ -845,14 +875,14 @@ static UINT8 HandleCtrlEvent(UINT8 evtType, INT32 evtParam)
 		{
 			double vol = masterVol / (double)0x10000;
 			double volDB = log(vol) / M_LN2 * 6.0;
-			printf("Volume: %.3f (%+5.1f db)%19s    \r", vol, volDB, "");
+			printf("Volume: %.3f (%+5.1f db)%*s    \r", vol, volDB, 19, "");	fflush(stdout);
 			noDispTime = 1000;
 		}
 		break;
 	case MI_EVT_VOL_CHG:
 		{
 			double vol = masterVol / (double)0x10000;
-			vol *= pow(2.0, evtParam / 10.0);
+			vol *= pow(2.0, evtParam / 60.0);
 			masterVol = (INT32)(vol * 0x10000 + 0.5);
 			if (masterVol < 0x0800)	// 1.0/32 = -30 db
 				masterVol = 0x0800;
@@ -865,7 +895,7 @@ static UINT8 HandleCtrlEvent(UINT8 evtType, INT32 evtParam)
 		{
 			double vol = masterVol / (double)0x10000;
 			double volDB = log(vol) / M_LN2 * 6.0;
-			printf("Volume: %.3f (%+5.1f db)%19s    \r", vol, volDB, "");
+			printf("Volume: %.3f (%+5.1f db)%*s    \r", vol, volDB, 19, "");	fflush(stdout);
 			noDispTime = 1000;
 		}
 		break;
@@ -879,6 +909,8 @@ static UINT8 HandleCtrlEvent(UINT8 evtType, INT32 evtParam)
 static int GetPressedKey(void)
 {
 	int keyCode = _getch();
+	if (keyCode >= 0x01 && keyCode <= 0x1A)
+		return KEY_CTRL | (keyCode - 0x01 + 'A');
 	switch(keyCode)
 	{
 	case 0xE0:	// Special Key #1
@@ -935,6 +967,8 @@ static int GetPressedKey(void)
 static int GetPressedKey(void)
 {
 	int keyCode = _getch();
+	if (keyCode >= 0x01 && keyCode <= 0x1A)
+		return KEY_CTRL | (keyCode - 0x01 + 'A');
 	if (keyCode != 0x1B)
 		return keyCode;
 	
@@ -1014,6 +1048,16 @@ static UINT8 HandleKeyPress(bool waitForKey)
 	case 'R':	// restart
 		mediaInfo.Event(MI_EVT_CONTROL, MIE_CTRL_RESTART);
 		break;
+	case KEY_CTRL | 'X':
+		quitAfterEnd = ! quitAfterEnd;
+		printf("%s after song end.%*s    \r", quitAfterEnd ? "Quitting" : "Not quitting", 19, "");	fflush(stdout);
+		noDispTime = 1000;
+		break;
+	case KEY_CTRL | 'P':
+		pauseAfterEnd = ! pauseAfterEnd;
+		printf("%s after song end.%*s    \r", pauseAfterEnd ? "Pausing" : "Not pausing", 20, "");	fflush(stdout);
+		noDispTime = 1000;
+		break;
 	case KEY_LEFT:
 	case KEY_RIGHT:
 	case KEY_CTRL | KEY_LEFT:
@@ -1038,7 +1082,7 @@ static UINT8 HandleKeyPress(bool waitForKey)
 	case KEY_CTRL | KEY_UP:
 	case KEY_CTRL | KEY_DOWN:
 		{
-			INT32 amount = (keyCode & KEY_CTRL) ? 10 : 1;
+			INT32 amount = (keyCode & KEY_CTRL) ? 30 : 2;
 			if ((keyCode & KEY_MASK) == KEY_DOWN)
 				amount *= -1;	// seek back
 			mediaInfo.Event(MI_EVT_VOL_CHG, amount);
@@ -1049,7 +1093,9 @@ static UINT8 HandleKeyPress(bool waitForKey)
 		{
 			UINT8 pbPos10 = keyCode - '0';
 			mediaInfo.Event(MI_EVT_SEEK_PERC, pbPos10 * 10);
+			break;
 		}
+		//printf("Unhandled key press: 0x%02X    \n", keyCode);
 		break;
 	}
 	
@@ -1143,7 +1189,7 @@ static UINT8 FilePlayCallback(PlayerBase* player, void* userParam, UINT8 evtType
 		mediaInfo.Signal(MI_SIG_POSITION);
 		break;
 	case PLREVT_END:
-		mediaInfo._playState |= PLAYSTATE_END;
+		mediaInfo._playState |= PLAYSTATE_FIN;
 		//printf("Song End.\n");
 		break;
 	}
