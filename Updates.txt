@@ -16,6 +16,8 @@ VGMPlay v0.50.2
 + restored ShowStreamCmds option
 + added volume control via Cursor Up/Down
 + added option to pause (Ctrl + P) or quit (Ctrl + X) after the current track
+* fixed VGMPlay keeping files open during whole playback - it closes the files now when they are fully loaded
++ added full support for GYM files
 
 
 VGMPlay v0.50.1

@@ -32,8 +32,9 @@ extern "C" int __cdecl _kbhit(void);
 #include <utils/DataLoader.h>
 #include <utils/FileLoader.h>
 #include <player/playerbase.hpp>
-#include <player/s98player.hpp>
 #include <player/droplayer.hpp>
+#include <player/gymplayer.hpp>
+#include <player/s98player.hpp>
 #include <player/vgmplayer.hpp>
 #include <player/playera.hpp>
 #include <audio/AudioStream.h>
@@ -206,6 +207,7 @@ UINT8 PlayerMain(UINT8 showFileName)
 	myPlayer.RegisterPlayerEngine(new VGMPlayer);
 	myPlayer.RegisterPlayerEngine(new S98Player);
 	myPlayer.RegisterPlayerEngine(new DROPlayer);
+	myPlayer.RegisterPlayerEngine(new GYMPlayer);
 	myPlayer.SetEventCallback(FilePlayCallback, NULL);
 	myPlayer.SetFileReqCallback(PlayerFileReqCallback, NULL);
 	ApplyCfg_General(myPlayer, genOpts);
@@ -448,8 +450,14 @@ static void ShowSongInfo(void)
 	
 	u8printf("Track Title:    %s\n", mediaInfo.GetSongTagForDisp("TITLE"));
 	u8printf("Game Name:      %s\n", mediaInfo.GetSongTagForDisp("GAME"));
-	u8printf("System:         %s\n", mediaInfo.GetSongTagForDisp("SYSTEM"));
-	u8printf("Composer:       %s\n", mediaInfo.GetSongTagForDisp("ARTIST"));
+	if (player->GetPlayerType() == FCC_GYM)
+		u8printf("Emulator:       %s\n", mediaInfo.GetSongTagForDisp("EMULATOR"));
+	else
+		u8printf("System:         %s\n", mediaInfo.GetSongTagForDisp("SYSTEM"));
+	if (player->GetPlayerType() == FCC_GYM)
+		u8printf("Publisher:      %s\n", mediaInfo.GetSongTagForDisp("PUBLISHER"));
+	else
+		u8printf("Composer:       %s\n", mediaInfo.GetSongTagForDisp("ARTIST"));
 	if (player->GetPlayerType() == FCC_S98)
 	{
 		S98Player* s98play = dynamic_cast<S98Player*>(player);

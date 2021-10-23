@@ -10,8 +10,9 @@
 
 #include <stdtype.h>
 #include <player/playerbase.hpp>
-#include <player/s98player.hpp>
 #include <player/droplayer.hpp>
+#include <player/gymplayer.hpp>
+#include <player/s98player.hpp>
 #include <player/vgmplayer.hpp>
 #include <player/playera.hpp>
 #include <emu/SoundDevs.h>
@@ -101,6 +102,27 @@ void MediaInfo::PreparePlayback(void)
 		_fileStartPos = drohdr->dataOfs;
 		
 		_isRawLog = true;
+	}
+	else if (player->GetPlayerType() == FCC_GYM)
+	{
+		GYMPlayer* gymplay = dynamic_cast<GYMPlayer*>(player);
+		const GYM_HEADER* gymhdr = gymplay->GetFileHeader();
+		
+		if (! gymhdr->hasHeader)
+			strcpy(verStr, "GYM");	// raw GYM
+		else if (gymhdr->uncomprSize == 0)
+			strcpy(verStr, "GYMX");	// GYM with GYMX header, uncompressed
+		else
+			strcpy(verStr, "GYMX (z)");	// GYMX, compressed
+		
+		_fileStartPos = gymhdr->dataOfs;
+		_fileEndPos = gymhdr->realFileSize;
+		
+		_isRawLog = true;
+	}
+	else
+	{
+		strcpy(verStr, "???");
 	}
 	_fileVerStr = verStr;
 	
