@@ -126,6 +126,7 @@ set(PLAYER_FILES
 	playcfg.cpp
 )
 set(PLAYER_LIBS)
+set(PLAYER_DEFS)
 
 # media control
 list(APPEND PLAYER_HEADERS mediactrl.hpp)
@@ -134,6 +135,7 @@ if(MEDIA_CONTROLS STREQUAL "WIN_KEYS")
 elseif(MEDIA_CONTROLS STREQUAL "WIN_OVERLAY")
 	list(APPEND PLAYER_FILES mediactrl_WinSMTC.cpp)
 	list(APPEND PLAYER_LIBS runtimeobject)	# for WindowsCreateStringReference, RoGetActivationFactory
+	list(APPEND PLAYER_DEFS ENABLE_WINRT)
 elseif(MEDIA_CONTROLS STREQUAL "DBUS")
 	if (NOT DBus1_FOUND)	# don't import again if already found - the module doesn't like this
 		find_package(DBus1 REQUIRED)
@@ -145,6 +147,7 @@ else()
 endif()
 
 add_executable(${PROJECT_NAME} ${HEADERS} ${SOURCES} ${PLAYER_HEADERS} ${PLAYER_FILES})
+target_compile_definitions(${PROJECT_NAME} PRIVATE ${PLAYER_DEFS})
 target_include_directories(${PROJECT_NAME} PRIVATE ${PROJECT_SOURCE_DIR} ${INCLUDES})
 target_link_libraries(${PROJECT_NAME} PRIVATE ${LIBRARIES} libvgm::vgm-utils libvgm::vgm-audio libvgm::vgm-emu libvgm::vgm-player ${PLAYER_LIBS})
 install(TARGETS ${PROJECT_NAME} RUNTIME DESTINATION "bin")

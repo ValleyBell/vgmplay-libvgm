@@ -154,7 +154,7 @@ UINT8 PlayerMain(UINT8 showFileName)
 	UINT8 retVal;
 	UINT8 fnShowMode;
 	
-#if _WIN32_WINNT >= 0x0603
+#ifdef ENABLE_WINRT
 	// The Windows Runtime (with COM) MUST be initialized before the audio API,
 	// which may initialize the COM library by itself and defaults to single-thread mode.
 	Microsoft::WRL::Wrappers::RoInitializeWrapper initialize(RO_INIT_MULTITHREADED);
