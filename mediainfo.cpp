@@ -1,6 +1,7 @@
 #include <string>
 #include <vector>
 #include <map>
+#include <string.h>	// for strcpy()
 #include <math.h>
 #ifdef _WIN32
 #include <windows.h>

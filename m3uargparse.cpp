@@ -13,6 +13,12 @@
 #include "utils.hpp"
 #include "m3uargparse.hpp"
 
+#ifdef _WIN32
+#if _MSC_VER >= 1400 || __GNUC__ >= 8
+#define USE_OPEN_W
+#endif
+#endif
+
 
 #ifdef _MSC_VER
 #define	stricmp	_stricmp
@@ -116,12 +122,12 @@ static bool ReadM3UPlaylist(const char* fileName, std::vector<SongFileList>& son
 	size_t songID;
 	CPCONV* cpcU8;
 	
-#if defined(_WIN32) && ! defined(_MSC_VER) || _MSC_VER >= 1400
+#if defined(_WIN32) && defined(USE_OPEN_W)
 	// not using libvgm CPConv here, because using WinAPIs doesn't need separate initialization
 	std::wstring fileNameW;
 	fileNameW.resize(MultiByteToWideChar(CP_UTF8, 0, fileName, -1, NULL, 0) - 1);
 	MultiByteToWideChar(CP_UTF8, 0, fileName, -1, &fileNameW[0], fileNameW.size());
-	hFile.open(fileNameW);
+	hFile.open(fileNameW.c_str());	// use "const wchar_t*" for MinGW implementations without wstring overload
 #else
 	hFile.open(fileName);
 #endif
