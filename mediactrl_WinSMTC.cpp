@@ -134,7 +134,7 @@ static void RefreshPlaybackState(void)
 	
 	HRESULT hRes = mSMTCtrl->put_PlaybackStatus(pbStat);
 	if (! SUCCEEDED(hRes))
-		printf("SMTC: Error setting playback state!");
+		printf("SMTC: Error setting playback state! (Error 0x%0X)\n", hRes);
 	
 	return;
 }
@@ -149,7 +149,7 @@ static bool InitDisplayAndControls(void)
 		interop.GetAddressOf());
 	if (FAILED(hRes))
 	{
-		printf("SMTC: Unable to create SMTCInterop object!\n");
+		printf("SMTC: Unable to create SMTCInterop object! (Error 0x%0X)\n", hRes);
 		return false;
 	}
 	if (! interop)
@@ -159,7 +159,7 @@ static bool InitDisplayAndControls(void)
 	hRes = interop->GetForWindow(mWindow, IID_PPV_ARGS(mSMTCtrl.GetAddressOf()));
 	if (FAILED(hRes))
 	{
-		printf("SMTC: interop->GetForWindow failed!\n");
+		printf("SMTC: SMTCInterop::GetForWindow failed! (Error 0x%0X)\n", hRes);
 		return false;
 	}
 	if (! mSMTCtrl)
@@ -168,7 +168,7 @@ static bool InitDisplayAndControls(void)
 	hRes = mSMTCtrl->get_DisplayUpdater(mDispUpd.GetAddressOf());
 	if (FAILED(hRes))
 	{
-		printf("SMTC: GetDisplayUpdater failed!\n");
+		printf("SMTC: GetDisplayUpdater failed! (Error 0x%0X)\n", hRes);
 		return false;
 	}
 	if (! mDispUpd)
@@ -186,7 +186,7 @@ static HRESULT ButtonCallback(WinMedia::ISystemMediaTransportControls*, WinMedia
 	HRESULT hRes = pArgs->get_Button(&btn);
 	if (FAILED(hRes))
 	{
-		printf("SMTC ButtonPressedEvent: Unable to get Button!");
+		printf("SMTC ButtonPressedEvent: Unable to get Button! (Error 0x%0X)\n", hRes);
 		return S_FALSE;
 	}
 	
@@ -203,7 +203,7 @@ static HRESULT PlaybackPosCallback(WinMedia::ISystemMediaTransportControls*, Win
 	HRESULT hRes = pArgs->get_RequestedPlaybackPosition(&tSpan);
 	if (FAILED(hRes))
 	{
-		printf("SMTC SeekEvent: Unable to get Button!");
+		printf("SMTC SeekEvent: Unable to get Button! (Error 0x%0X)\n", hRes);
 		return S_FALSE;
 	}
 	
@@ -221,7 +221,7 @@ static bool RegisterEvents(void)
 	HRESULT hRes = mSMTCtrl->add_ButtonPressed(cbBtnPressed.Get(), &mBtnPressEvt);
 	if (FAILED(hRes))
 	{
-		printf("SMTC: Unable to install callback!");
+		printf("SMTC: Unable to install callback! (Error 0x%0X)\n", hRes);
 		return false;
 	}
 	
@@ -233,7 +233,7 @@ static bool RegisterEvents(void)
 			MsWRL::Callback<PlaybacPos_ChangeReqEvt_Callback>(PlaybackPosCallback);
 		HRESULT hRes = smtcCtrl2->add_PlaybackPositionChangeRequested(cbPbPosChange.Get(), &mPbPosChangeEvt);
 		if (FAILED(hRes))
-			printf("SMTC: Unable to install callback for seeking!");
+			printf("SMTC: Unable to install callback for seeking! (Error 0x%0X)\n", hRes);
 	}
 
 	return true;
@@ -295,7 +295,7 @@ static void SetTrackTime(void)
 		timeProps.GetAddressOf());
 	if (FAILED(hRes))
 	{
-		printf("SMTC: Unable to create TimelineProperties object!\n");
+		printf("SMTC: Unable to create TimelineProperties object! (Error 0x%0X)\n", hRes);
 		return;
 	}
 	
@@ -311,7 +311,7 @@ static void SetTrackTime(void)
 	hRes = smtcCtrl2->UpdateTimelineProperties(timeProps.Get());
 	if (FAILED(hRes))
 	{
-		printf("SMTC: Unable to set track time properties!\n");
+		printf("SMTC: Unable to set track time properties! (Error 0x%0X)\n", hRes);
 		return;
 	}
 	
@@ -329,7 +329,7 @@ static void SetMetadata(void)
 	hRes = mDispUpd->get_MusicProperties(musicProps.GetAddressOf());
 	if (FAILED(hRes))
 	{
-		printf("SMTC: Failed to get music properties!\n");
+		printf("SMTC: Failed to get music properties! (Error 0x%0X)\n", hRes);
 		return;
 	}
 	musicProps.As(&musicProp2);	// ComPtr stays NULL when casting should fail
@@ -341,13 +341,13 @@ static void SetMetadata(void)
 	
 	hRes = musicProps->put_Artist(MsWRL::Wrappers::HStringReference(artistWStr).Get());
 	if (FAILED(hRes))
-		printf("SMTC: Failed to set artist\n");
+		printf("SMTC: Failed to set artist! (Error 0x%0X)\n", hRes);
 	hRes = musicProps->put_Title(MsWRL::Wrappers::HStringReference(titleWStr).Get());
 	if (FAILED(hRes))
-		printf("SMTC: Failed to set title\n");
+		printf("SMTC: Failed to set title! (Error 0x%0X)\n", hRes);
 	hRes = musicProps->put_AlbumArtist(MsWRL::Wrappers::HStringReference(albumWStr).Get());
 	if (FAILED(hRes))
-		printf("SMTC: Failed to set album\n");
+		printf("SMTC: Failed to set album! (Error 0x%0X)\n", hRes);
 	
 	if (musicProp2)
 		musicProp2->put_TrackNumber(1 + mInf->_playlistTrkID);
@@ -361,7 +361,7 @@ static void SetMetadata(void)
 	hRes = mDispUpd->Update();
 	if (FAILED(hRes))
 	{
-		printf("SMTC: Failed to update metadata!");
+		printf("SMTC: Failed to update metadata! (Error 0x%0X)\n", hRes);
 		return;
 	}
 	
@@ -453,7 +453,7 @@ static void SetThumbnail(const std::string& filePath)
 		strgFileStatic.GetAddressOf());
 	if (FAILED(hRes))
 	{
-		printf("SMTC: Unable to create StorageFileStatics object!\n");
+		printf("SMTC: Unable to create StorageFileStatics object! (Error 0x%0X)\n", hRes);
 		return;
 	}
 
@@ -462,7 +462,7 @@ static void SetThumbnail(const std::string& filePath)
 	free(thumbPathW);
 	if (FAILED(hRes))
 	{
-		printf("SMTC: GetFileFromPathAsync failed!\n");
+		printf("SMTC: GetFileFromPathAsync failed! (Error 0x%0X)\n", hRes);
 		return;
 	}
 	
@@ -484,7 +484,7 @@ static void SetThumbnail_Exec(MsWRL::ComPtr<WinStrg::IStorageFile> thumbISF)
 		streamRefFactory.GetAddressOf());
 	if (FAILED(hRes))
 	{
-		printf("SMTC: Unable to create RandomAccessStreamReferenceStatics object!\n");
+		printf("SMTC: Unable to create RandomAccessStreamReferenceStatics object! (Error 0x%0X)\n", hRes);
 		return;
 	}
 	
@@ -492,21 +492,21 @@ static void SetThumbnail_Exec(MsWRL::ComPtr<WinStrg::IStorageFile> thumbISF)
 	hRes = streamRefFactory->CreateFromFile(thumbISF.Get(), mImgStrmRef.GetAddressOf());
 	if (FAILED(hRes))
 	{
-		printf("SMTC: Failed to create ImageStreamReference!\n");
+		printf("SMTC: Failed to create ImageStreamReference! (Error 0x%0X)\n", hRes);
 		return;
 	}
 	
 	hRes = mDispUpd->put_Thumbnail(mImgStrmRef.Get());
 	if (FAILED(hRes))
 	{
-		printf("SMTC: Failed to set thumbnail\n");
+		printf("SMTC: Failed to set thumbnail! (Error 0x%0X)\n", hRes);
 		return;
 	}
 	
 	hRes = mDispUpd->Update();
 	if (FAILED(hRes))
 	{
-		printf("SMTC: Failed to update thumbnail\n");
+		printf("SMTC: Failed to update thumbnail! (Error 0x%0X)\n", hRes);
 		return;
 	}
 	
