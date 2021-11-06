@@ -7,6 +7,8 @@ class MediaInfo;
 class MediaControl
 {
 public:
+	MediaControl();
+	~MediaControl();
 	UINT8 Init(MediaInfo& mediaInfo);
 	void Deinit(void);
 private:

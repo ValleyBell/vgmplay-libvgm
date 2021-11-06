@@ -568,6 +568,16 @@ static void SetThumbnail_Exec(MsWRL::ComPtr<WinStrg::IStorageFile> thumbISF)
 }
 
 
+MediaControl::MediaControl()
+{
+}
+
+MediaControl::~MediaControl()
+{
+	if (mSMTCtrl)
+		Deinit();
+}
+
 UINT8 MediaControl::Init(MediaInfo& mediaInfo)
 {
 	if (mSMTCtrl)
@@ -620,6 +630,7 @@ void MediaControl::Deinit(void)
 	ClearThumbnail();
 	mSMTCtrl->put_IsEnabled(false);
 	
+	mSFileAsyncOp.Reset();
 	mDispUpd.Reset();
 	mSMTCtrl.Reset();
 	DestroyDummyWindow();

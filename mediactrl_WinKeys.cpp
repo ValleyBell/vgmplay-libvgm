@@ -68,6 +68,16 @@ static DWORD WINAPI KeyMessageThread(void* args)
 	return 0;
 }
 
+MediaControl::MediaControl()
+{
+}
+
+MediaControl::~MediaControl()
+{
+	if (hThread != NULL)
+		Deinit();
+}
+
 UINT8 MediaControl::Init(MediaInfo& mediaInfo)
 {
 	if (hThread != NULL)

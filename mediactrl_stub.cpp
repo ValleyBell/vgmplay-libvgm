@@ -1,6 +1,15 @@
 #include <stdtype.h>
 #include "mediactrl.hpp"
 
+MediaControl::MediaControl()
+{
+}
+
+MediaControl::~MediaControl()
+{
+	Deinit();
+}
+
 UINT8 MediaControl::Init(MediaInfo& mediaInfo)
 {
 	return 0x00;

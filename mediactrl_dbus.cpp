@@ -947,6 +947,16 @@ static void DispatchThread(void* args)
 		;
 }
 
+MediaControl::MediaControl()
+{
+}
+
+MediaControl::~MediaControl()
+{
+	if(connection != NULL)
+		Deinit();
+}
+
 UINT8 MediaControl::Init(MediaInfo& mediaInfo)
 {
 	mInf = &mediaInfo;
