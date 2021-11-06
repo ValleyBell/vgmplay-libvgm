@@ -1,6 +1,8 @@
 // huge thanks to the Firefox developers for figuring out how all of this stuff works
 #include <windows.h>
 #include <stdio.h>
+#include <string.h>	// for memset()
+#include <tchar.h>
 
 //#define WINDOWS_FOUNDATION_UNIVERSALAPICONTRACT_VERSION	0x10000
 #include <windows.media.h>
@@ -55,6 +57,8 @@ static inline INT64 Time2WinTicks(double time);
 
 static UINT8 HandleMediaKeyPress(WinMedia::SystemMediaTransportControlsButton keycode);
 static void RefreshPlaybackState(void);
+static bool CreateDummyWindow(void);
+static void DestroyDummyWindow(void);
 static bool InitDisplayAndControls(void);
 static HRESULT ButtonCallback(WinMedia::ISystemMediaTransportControls*, WinMedia::ISystemMediaTransportControlsButtonPressedEventArgs* pArgs);
 static HRESULT PlaybackPosCallback(WinMedia::ISystemMediaTransportControls*, WinMedia::IPlaybackPositionChangeRequestedEventArgs* pArgs);
@@ -72,6 +76,8 @@ static void SetThumbnail_Exec(MsWRL::ComPtr<WinStrg::IStorageFile> thumbISF);
 
 static CPCONV* cpcU8_Wide;
 static HWND mWindow;
+static ATOM dummyWCAtom = 0;
+static HWND dummyWindow = NULL;	// invisible window - fallback when "just use the console window" doesn't work
 static MediaInfo* mInf;
 static MsWRL::ComPtr<ISMTC> mSMTCtrl;
 static MsWRL::ComPtr<ISMTCDisplayUpdater> mDispUpd;
@@ -139,6 +145,40 @@ static void RefreshPlaybackState(void)
 	return;
 }
 
+static bool CreateDummyWindow(void)
+{
+	WNDCLASS wCls;
+	memset(&wCls, 0x00, sizeof(WNDCLASS));
+	wCls.lpszClassName = TEXT("VGMPlay-MediaKeys");
+	wCls.hInstance = nullptr;
+	wCls.lpfnWndProc = DefWindowProc;
+	dummyWCAtom = RegisterClass(&wCls);
+	if (dummyWCAtom == 0)
+		return false;
+	
+	dummyWindow = CreateWindowEx(0x00, (LPCSTR)dummyWCAtom, TEXT("VGMPlay Media Keys"), 0x00,
+		CW_USEDEFAULT, CW_USEDEFAULT, 0, 0, NULL, NULL, NULL, NULL);
+	if (dummyWindow == NULL)
+		return false;
+	return true;
+}
+
+static void DestroyDummyWindow(void)
+{
+	if (dummyWindow != NULL)
+	{
+		DestroyWindow(dummyWindow);
+		dummyWindow = NULL;
+	}
+	if (dummyWCAtom != 0)
+	{
+		UnregisterClass((LPCSTR)dummyWCAtom, NULL);
+		dummyWCAtom = 0;
+	}
+	
+	return;
+}
+
 static bool InitDisplayAndControls(void)
 {
 	HRESULT hRes;
@@ -159,8 +199,19 @@ static bool InitDisplayAndControls(void)
 	hRes = interop->GetForWindow(mWindow, IID_PPV_ARGS(mSMTCtrl.GetAddressOf()));
 	if (FAILED(hRes))
 	{
-		printf("SMTC: SMTCInterop::GetForWindow failed! (Error 0x%0X)\n", hRes);
-		return false;
+		HRESULT hResOrg = hRes;
+		// fallback: create a dummy window and try again with that window
+		if (CreateDummyWindow())
+		{
+			mWindow = dummyWindow;
+			hRes = interop->GetForWindow(mWindow, IID_PPV_ARGS(mSMTCtrl.GetAddressOf()));
+		}
+		if (FAILED(hRes))
+		{
+			// show old error message
+			printf("SMTC: SMTCInterop::GetForWindow failed! (Error 0x%0X)\n", hResOrg);
+			return false;
+		}
 	}
 	if (! mSMTCtrl)
 		return false;
@@ -569,6 +620,9 @@ void MediaControl::Deinit(void)
 	ClearThumbnail();
 	mSMTCtrl->put_IsEnabled(false);
 	
+	mDispUpd.Reset();
+	mSMTCtrl.Reset();
+	DestroyDummyWindow();
 	if (cpcU8_Wide != NULL)
 	{
 		CPConv_Deinit(cpcU8_Wide);
