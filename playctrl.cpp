@@ -80,6 +80,8 @@ static UINT32 FillBuffer(void* drvStruct, void* userParam, UINT32 bufSize, void*
 static UINT32 FillBufferDummy(void* drvStruct, void* userParam, UINT32 bufSize, void* data);
 static UINT8 FilePlayCallback(PlayerBase* player, void* userParam, UINT8 evtType, void* evtParam);
 static DATA_LOADER* PlayerFileReqCallback(void* userParam, PlayerBase* player, const char* fileName);
+static void PlayerLogCallback(void* userParam, PlayerBase* player, UINT8 level, UINT8 srcType,
+	const char* srcTag, const char* message);
 static UINT8 ChooseAudioDriver(AudioDriver* aDrv);
 static UINT8 InitAudioDriver(AudioDriver* aDrv);
 static UINT8 InitAudioSystem(void);
@@ -210,6 +212,7 @@ UINT8 PlayerMain(UINT8 showFileName)
 	myPlayer.RegisterPlayerEngine(new GYMPlayer);
 	myPlayer.SetEventCallback(FilePlayCallback, NULL);
 	myPlayer.SetFileReqCallback(PlayerFileReqCallback, NULL);
+	myPlayer.SetLogCallback(PlayerLogCallback, NULL);
 	ApplyCfg_General(myPlayer, genOpts);
 	for (size_t curChp = 0; curChp < 0x100; curChp ++)
 	{
@@ -1220,6 +1223,30 @@ static DATA_LOADER* PlayerFileReqCallback(void* userParam, PlayerBase* player, c
 		return dLoad;
 	DataLoader_Deinit(dLoad);
 	return NULL;
+}
+
+static void PlayerLogCallback(void* userParam, PlayerBase* player, UINT8 level, UINT8 srcType,
+	const char* srcTag, const char* message)
+{
+	// I don't want to have a text for the "off" level.
+	static const char* LOGLVL_NAMES[6] = {"---", "Error", "Warn", "Info", "Debug", "Trace"};
+	const char* lvlName;
+	
+	if (srcType == PLRLOGSRC_PLR)
+	{
+		if (level > mediaInfo._genOpts.logLvlFile)
+			return;	// don't print messages with higher verbosity than current log level
+		lvlName = (level < 6) ? LOGLVL_NAMES[level] : "---";
+		printf("%s %s: %s", player->GetPlayerName(), lvlName, message);
+	}
+	else //if (srcType == PLRLOGSRC_EMU)
+	{
+		if (level > mediaInfo._genOpts.logLvlEmu)
+			return;	// don't print messages with higher verbosity than current log level
+		lvlName = (level < 6) ? LOGLVL_NAMES[level] : "---";
+		printf("%s %s: %s", srcTag, lvlName, message);
+	}
+	return;
 }
 
 static UINT8 ChooseAudioDriver(AudioDriver* aDrv)

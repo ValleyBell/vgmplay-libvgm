@@ -30,6 +30,9 @@ struct GeneralOptions
 	bool fadeRawLogs;
 	UINT8 showStrmCmds;
 	
+	UINT8 logLvlFile;	// file playback
+	UINT8 logLvlEmu;	// sound emulation
+	
 	UINT32 audDriverID;
 	std::string audDriverName;
 	UINT32 audOutDev;

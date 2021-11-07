@@ -191,6 +191,33 @@ static std::vector<std::string> Cfg_Str2VectStr(const std::string& text)
 	return result;
 }
 
+static UINT8 Cfg_LogLevel_Str2UInt(const std::string& text)
+{
+	static const char* LOGLVL_NAMES[6] = {"off", "error", "warn", "info", "debug", "trace"};
+	static UINT8 LOGLVL_VALS[6] =
+		{PLRLOG_OFF, PLRLOG_ERROR, PLRLOG_WARN, PLRLOG_INFO, PLRLOG_DEBUG, PLRLOG_TRACE};
+	size_t lvl;
+	
+	for (lvl = 0; lvl < 6; lvl ++)
+	{
+		if (! stricmp(text.c_str(), LOGLVL_NAMES[lvl]))
+			return LOGLVL_VALS[lvl];
+	}
+	return 0xFF;
+}
+
+static UINT8 Cfg_GetLogLevel(const CfgSection::Unordered& ceList, const std::string& entryName, UINT8 defaultLevel)
+{
+	std::string llStr = Cfg_GetStrOrDefault(ceList, entryName, "");
+	if (llStr.empty())
+		return defaultLevel;
+	
+	if (isdigit((unsigned char)llStr[0]))
+		return (UINT8)Configuration::ToUInt(llStr);
+	UINT8 level = Cfg_LogLevel_Str2UInt(llStr);
+	return (level != 0xFF) ? level : defaultLevel;
+}
+
 static void ParseCfg_General(GeneralOptions& opts, const CfgSection& cfg)
 {
 	const CfgSection::Unordered& ceList = cfg.unord;
@@ -204,6 +231,9 @@ static void ParseCfg_General(GeneralOptions& opts, const CfgSection& cfg)
 	opts.resmplMode =	 (UINT8)Cfg_GetUIntOrDefault(ceList, "ResamplingMode", 0);
 	opts.chipSmplMode =	 (UINT8)Cfg_GetUIntOrDefault(ceList, "ChipSmplMode", 0);
 	opts.chipSmplRate =	(UINT32)Cfg_GetUIntOrDefault(ceList, "ChipSmplRate", 0);
+	
+	opts.logLvlFile =	        Cfg_GetLogLevel(ceList, "LogLevelFile", PLRLOG_INFO);
+	opts.logLvlEmu =	        Cfg_GetLogLevel(ceList, "LogLevelEmu", DEVLOG_ERROR);
 	
 	opts.fadeTime_single =	(UINT32)Cfg_GetUIntOrDefault(ceList, "FadeTime", 5000);
 	opts.fadeTime_plist =	(UINT32)Cfg_GetUIntOrDefault(ceList, "FadeTimePL", 2000);
