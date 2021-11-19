@@ -24,6 +24,7 @@ They weren't lying when they said that using libdbus directly signs you up for s
 #include "utils.hpp"
 #include "mediainfo.hpp"
 #include "mediactrl.hpp"
+#include "mediactrl_dbus.hpp"
 
 // DBus MPRIS Constants
 #define DBUS_MPRIS_PATH             "/org/mpris/MediaPlayer2"
@@ -947,17 +948,17 @@ static void DispatchThread(void* args)
 		;
 }
 
-MediaControl::MediaControl()
+MediaCtrlDBus::MediaCtrlDBus()
 {
 }
 
-MediaControl::~MediaControl()
+MediaCtrlDBus::~MediaCtrlDBus()
 {
 	if(connection != NULL)
 		Deinit();
 }
 
-UINT8 MediaControl::Init(MediaInfo& mediaInfo)
+UINT8 MediaCtrlDBus::Init(MediaInfo& mediaInfo)
 {
 	mInf = &mediaInfo;
 	mInf->_enableAlbumImage = true;
@@ -993,7 +994,7 @@ UINT8 MediaControl::Init(MediaInfo& mediaInfo)
 	return 0x00;
 }
 
-void MediaControl::Deinit(void)
+void MediaCtrlDBus::Deinit(void)
 {
 	mInf->RemoveSignalCallback(&MediaControl::SignalCB, this);
 	dbThrStop = true;
@@ -1011,14 +1012,7 @@ void MediaControl::Deinit(void)
 	dbus_shutdown();
 }
 
-/*static*/ void MediaControl::SignalCB(MediaInfo* mInfo, void* userParam, UINT8 signalMask)
-{
-	MediaControl* obj = static_cast<MediaControl*>(userParam);
-	obj->SignalHandler(signalMask);
-	return;
-}
-
-void MediaControl::SignalHandler(UINT8 signalMask)
+void MediaCtrlDBus::SignalHandler(UINT8 signalMask)
 {
 	UINT8 dbusSignal = 0x00;
 	if (signalMask & MI_SIG_NEW_SONG)

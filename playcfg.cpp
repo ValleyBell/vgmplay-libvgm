@@ -30,6 +30,7 @@
 
 #include "config.hpp"
 #include "playcfg.hpp"
+#include "mediactrl.hpp"	// for MCTRLSIG_* constants
 
 
 struct ChipCfgSectDef
@@ -218,6 +219,22 @@ static UINT8 Cfg_GetLogLevel(const CfgSection::Unordered& ceList, const std::str
 	return (level != 0xFF) ? level : defaultLevel;
 }
 
+static UINT8 Cfg_MediaKeys_Str2UInt(const std::string& text)
+{
+	static const char* MKEY_NAMES[5] = {"Default", "None", "WinKeys", "SMTC", "DBus"};
+	static UINT8 MKEY_VALS[5] =
+		{0xFF, MCTRLSIG_NONE, MCTRLSIG_WINKEY, MCTRLSIG_SMTC, MCTRLSIG_DBUS};
+	// 0xFF == default, 0xFE = invalid
+	size_t lvl;
+	
+	for (lvl = 0; lvl < 5; lvl ++)
+	{
+		if (! stricmp(text.c_str(), MKEY_NAMES[lvl]))
+			return MKEY_VALS[lvl];
+	}
+	return 0xFE;
+}
+
 static void ParseCfg_General(GeneralOptions& opts, const CfgSection& cfg)
 {
 	const CfgSection::Unordered& ceList = cfg.unord;
@@ -246,6 +263,7 @@ static void ParseCfg_General(GeneralOptions& opts, const CfgSection& cfg)
 	opts.preferJapTag =		  (bool)Cfg_GetBoolOrDefault(ceList, "PreferJapTag", false);
 	opts.showDevCore =		  (bool)Cfg_GetBoolOrDefault(ceList, "ShowChipCore", false);
 	opts.setTermTitle =		  (bool)Cfg_GetBoolOrDefault(ceList, "SetTerminalTitle", true);
+	opts.mediaKeys =		        Cfg_MediaKeys_Str2UInt(Cfg_GetStrOrDefault(ceList, "MediaKeys", "Default"));
 	{
 		std::string hsStr = Cfg_GetStrOrDefault(ceList, "HardStopOld", "0");
 		if (isdigit((unsigned char)hsStr[0]))

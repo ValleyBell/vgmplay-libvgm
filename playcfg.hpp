@@ -26,6 +26,7 @@ struct GeneralOptions
 	bool preferJapTag;
 	bool showDevCore;
 	bool setTermTitle;
+	UINT8 mediaKeys;
 	UINT8 hardStopOld;
 	bool fadeRawLogs;
 	UINT8 showStrmCmds;

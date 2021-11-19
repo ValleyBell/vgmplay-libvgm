@@ -130,20 +130,24 @@ set(PLAYER_DEFS)
 
 # media control
 list(APPEND PLAYER_HEADERS mediactrl.hpp)
+list(APPEND PLAYER_FILES mediactrl.cpp)
 if(MEDIA_CONTROLS STREQUAL "WIN_KEYS")
+	list(APPEND PLAYER_HEADERS mediactrl_WinKeys.hpp)
 	list(APPEND PLAYER_FILES mediactrl_WinKeys.cpp)
+	list(APPEND PLAYER_DEFS MEDIACTRL_WINKEYS)
 elseif(MEDIA_CONTROLS STREQUAL "WIN_OVERLAY")
-	list(APPEND PLAYER_FILES mediactrl_WinSMTC.cpp)
+	list(APPEND PLAYER_HEADERS mediactrl_WinKeys.hpp mediactrl_WinSMTC.hpp)
+	list(APPEND PLAYER_FILES mediactrl_WinKeys.cpp mediactrl_WinSMTC.cpp)
 	list(APPEND PLAYER_LIBS runtimeobject)	# for WindowsCreateStringReference, RoGetActivationFactory
-	list(APPEND PLAYER_DEFS ENABLE_WINRT)
+	list(APPEND PLAYER_DEFS ENABLE_WINRT MEDIACTRL_WINKEYS MEDIACTRL_SMTC)
 elseif(MEDIA_CONTROLS STREQUAL "DBUS")
 	if (NOT DBus1_FOUND)	# don't import again if already found - the module doesn't like this
 		find_package(DBus1 REQUIRED)
 	endif()
+	list(APPEND PLAYER_HEADERS mediactrl_dbus.hpp)
 	list(APPEND PLAYER_FILES mediactrl_dbus.cpp)
 	list(APPEND PLAYER_LIBS dbus-1)
-else()
-	list(APPEND PLAYER_FILES mediactrl_stub.cpp)
+	list(APPEND PLAYER_DEFS MEDIACTRL_DBUS)
 endif()
 
 add_executable(${PROJECT_NAME} ${HEADERS} ${SOURCES} ${PLAYER_HEADERS} ${PLAYER_FILES})

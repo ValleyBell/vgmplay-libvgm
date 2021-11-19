@@ -90,6 +90,7 @@ static UINT8 StartAudioDevice(void);
 static UINT8 StopAudioDevice(void);
 static UINT8 StartDiskWriter(const std::string& songFileName);
 static UINT8 StopDiskWriter(void);
+static void InitMediaControls(void);
 #ifndef _WIN32
 static void changemode(UINT8 noEcho);
 static int _kbhit(void);
@@ -138,7 +139,7 @@ static int controlVal;
 static size_t curSong;
 
 static MediaInfo mediaInfo;
-static MediaControl mediaCtrl;
+static MediaControl* mediaCtrl = NULL;
 static INT32 masterVol;
 static INT32 noDispTime;
 static bool pauseAfterEnd;
@@ -226,7 +227,8 @@ UINT8 PlayerMain(UINT8 showFileName)
 	
 	mediaInfo._enableAlbumImage = false;	// disable by default, MediaCtrl objects will enable it on demand
 	//mediaInfo.AddSignalCallback(SignalCB, NULL);
-	mediaCtrl.Init(mediaInfo);
+	
+	InitMediaControls();
 	
 #ifndef _WIN32
 	changemode(1);
@@ -335,7 +337,12 @@ UINT8 PlayerMain(UINT8 showFileName)
 #ifndef _WIN32
 	changemode(0);
 #endif
-	mediaCtrl.Deinit();
+	if (mediaCtrl != NULL)
+	{
+		mediaCtrl->Deinit();
+		delete mediaCtrl;
+		mediaCtrl = NULL;
+	}
 	
 	myPlayer.UnregisterAllPlayers();
 	
@@ -1558,6 +1565,61 @@ static UINT8 StopDiskWriter(void)
 	if (adOut.data != NULL)
 		AudioDrv_DataForward_Remove(adOut.data, adLog.data);
 	return AudioDrv_Stop(adLog.data);
+}
+
+static void InitMediaControls(void)
+{
+	static const UINT8 MKEY_SIGS[] =
+	{
+#ifdef MEDIACTRL_SMTC
+		MCTRLSIG_SMTC,	// list SMTC before WinKeys so that SMTC is tried first
+#endif
+#ifdef MEDIACTRL_WINKEYS
+		MCTRLSIG_WINKEY,
+#endif
+#ifdef MEDIACTRL_DBUS
+		MCTRLSIG_DBUS,
+#endif
+	};
+	UINT8 retVal = 0x00;
+	
+	if (mediaInfo._genOpts.mediaKeys == 0xFF)	// default
+	{
+		for (size_t sigID = 0; sigID < sizeof(MKEY_SIGS); sigID ++)
+		{
+			mediaCtrl = GetMediaControl(MKEY_SIGS[sigID]);
+			if (mediaCtrl != NULL)
+			{
+				retVal = mediaCtrl->Init(mediaInfo);
+				if (! (retVal & 0x80))
+				{
+					// everything okay
+					break;
+				}
+				else
+				{
+					// initialization failed - try another media control method
+					delete mediaCtrl;
+					mediaCtrl = NULL;
+				}
+			}
+		}
+	}
+	else
+	{
+		mediaCtrl = GetMediaControl(mediaInfo._genOpts.mediaKeys);
+		if (mediaCtrl == NULL)
+		{
+			printf("Media Keys method unavailable!\n");
+		}
+		else
+		{
+			retVal = mediaCtrl->Init(mediaInfo);
+			if (retVal & 0x80)
+				printf("Media Keys initialization failed with code 0x%02X!\n", retVal);
+		}
+	}
+	return;
 }
 
 

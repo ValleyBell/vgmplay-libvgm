@@ -4,6 +4,7 @@
 #include <stdtype.h>
 #include "mediainfo.hpp"
 #include "mediactrl.hpp"
+#include "mediactrl_WinKeys.hpp"
 
 #ifndef VK_MEDIA_NEXT_TRACK
 // from WinUser.h
@@ -48,7 +49,7 @@ static DWORD WINAPI KeyMessageThread(void* args)
 	PeekMessage(&msg, NULL, WM_USER, WM_USER, PM_NOREMOVE);
 	
 	retValB = RegisterHotKey(NULL, VK_MEDIA_PLAY_PAUSE, 0, VK_MEDIA_PLAY_PAUSE);
-	//retValB = RegisterHotKey(NULL, VK_MEDIA_STOP, 0, VK_MEDIA_STOP);
+	retValB = RegisterHotKey(NULL, VK_MEDIA_STOP, 0, VK_MEDIA_STOP);
 	retValB = RegisterHotKey(NULL, VK_MEDIA_PREV_TRACK, 0, VK_MEDIA_PREV_TRACK);
 	retValB = RegisterHotKey(NULL, VK_MEDIA_NEXT_TRACK, 0, VK_MEDIA_NEXT_TRACK);
 	
@@ -61,24 +62,24 @@ static DWORD WINAPI KeyMessageThread(void* args)
 	}
 	
 	UnregisterHotKey(NULL, VK_MEDIA_PLAY_PAUSE);
-	//UnregisterHotKey(NULL, VK_MEDIA_STOP);
+	UnregisterHotKey(NULL, VK_MEDIA_STOP);
 	UnregisterHotKey(NULL, VK_MEDIA_PREV_TRACK);
 	UnregisterHotKey(NULL, VK_MEDIA_NEXT_TRACK);
 	
 	return 0;
 }
 
-MediaControl::MediaControl()
+MediaCtrlMKeys::MediaCtrlMKeys()
 {
 }
 
-MediaControl::~MediaControl()
+MediaCtrlMKeys::~MediaCtrlMKeys()
 {
 	if (hThread != NULL)
 		Deinit();
 }
 
-UINT8 MediaControl::Init(MediaInfo& mediaInfo)
+UINT8 MediaCtrlMKeys::Init(MediaInfo& mediaInfo)
 {
 	if (hThread != NULL)
 		return 0x01;
@@ -95,7 +96,7 @@ UINT8 MediaControl::Init(MediaInfo& mediaInfo)
 	return 0x00;
 }
 
-void MediaControl::Deinit(void)
+void MediaCtrlMKeys::Deinit(void)
 {
 	if (hThread == NULL)
 		return;
@@ -109,14 +110,7 @@ void MediaControl::Deinit(void)
 	return;
 }
 
-/*static*/ void MediaControl::SignalCB(MediaInfo* mInfo, void* userParam, UINT8 signalMask)
-{
-	MediaControl* obj = static_cast<MediaControl*>(userParam);
-	obj->SignalHandler(signalMask);
-	return;
-}
-
-void MediaControl::SignalHandler(UINT8 signalMask)
+void MediaCtrlMKeys::SignalHandler(UINT8 signalMask)
 {
 	return;
 }

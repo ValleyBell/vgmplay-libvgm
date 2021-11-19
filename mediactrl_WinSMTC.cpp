@@ -13,6 +13,7 @@
 #include <utils/StrUtils.h>
 #include "mediainfo.hpp"
 #include "mediactrl.hpp"
+#include "mediactrl_WinSMTC.hpp"
 
 
 namespace MsWRL = Microsoft::WRL;
@@ -568,17 +569,17 @@ static void SetThumbnail_Exec(MsWRL::ComPtr<WinStrg::IStorageFile> thumbISF)
 }
 
 
-MediaControl::MediaControl()
+MediaCtrlSMTC::MediaCtrlSMTC()
 {
 }
 
-MediaControl::~MediaControl()
+MediaCtrlSMTC::~MediaCtrlSMTC()
 {
 	if (mSMTCtrl)
 		Deinit();
 }
 
-UINT8 MediaControl::Init(MediaInfo& mediaInfo)
+UINT8 MediaCtrlSMTC::Init(MediaInfo& mediaInfo)
 {
 	if (mSMTCtrl)
 		return 0x01;
@@ -619,7 +620,7 @@ UINT8 MediaControl::Init(MediaInfo& mediaInfo)
 	return 0x00;
 }
 
-void MediaControl::Deinit(void)
+void MediaCtrlSMTC::Deinit(void)
 {
 	if (! mSMTCtrl)
 		return;
@@ -643,14 +644,7 @@ void MediaControl::Deinit(void)
 	return;
 }
 
-/*static*/ void MediaControl::SignalCB(MediaInfo* mInfo, void* userParam, UINT8 signalMask)
-{
-	MediaControl* obj = static_cast<MediaControl*>(userParam);
-	obj->SignalHandler(signalMask);
-	return;
-}
-
-void MediaControl::SignalHandler(UINT8 signalMask)
+void MediaCtrlSMTC::SignalHandler(UINT8 signalMask)
 {
 	if (signalMask & MI_SIG_NEW_SONG)
 	{
