@@ -80,16 +80,21 @@ set_property(CACHE MEDIA_CONTROLS PROPERTY STRINGS "OFF;WIN_KEYS;WIN_OVERLAY;DBU
 
 
 # --- INI reading ---
-set(INIH_DIR libs/inih)
-set(HEADERS ${HEADERS}
-		${INIH_DIR}/ini.h
-	)
-set(SOURCES ${SOURCES}
-		${INIH_DIR}/ini.c
-	)
-set(INCLUDES ${INCLUDES}
-		${INIH_DIR}
-	)
+include(FindPkgConfig OPTIONAL)
+if(PKG_CONFIG_FOUND)
+	pkg_check_modules(INIH inih)
+else()
+	set(INIH_DIR libs/inih)
+	set(HEADERS ${HEADERS}
+			${INIH_DIR}/ini.h
+		)
+	set(SOURCES ${SOURCES}
+			${INIH_DIR}/ini.c
+		)
+	set(INCLUDES ${INCLUDES}
+			${INIH_DIR}
+		)
+endif()
 
 
 # --- Windows getopt --
@@ -154,6 +159,10 @@ add_executable(${PROJECT_NAME} ${HEADERS} ${SOURCES} ${PLAYER_HEADERS} ${PLAYER_
 target_compile_definitions(${PROJECT_NAME} PRIVATE ${PLAYER_DEFS})
 target_include_directories(${PROJECT_NAME} PRIVATE ${PROJECT_SOURCE_DIR} ${INCLUDES})
 target_link_libraries(${PROJECT_NAME} PRIVATE ${LIBRARIES} libvgm::vgm-utils libvgm::vgm-audio libvgm::vgm-emu libvgm::vgm-player ${PLAYER_LIBS})
+if(INIH_FOUND)
+	target_include_directories(${PROJECT_NAME} PRIVATE ${INIH_INCLUDE_DIRS})
+	target_link_libraries(${PROJECT_NAME} PUBLIC ${INIH_LDFLAGS})
+endif(INIH_FOUND)
 install(TARGETS ${PROJECT_NAME} RUNTIME DESTINATION "bin")
 #add_sanitizers(${PROJECT_NAME})
 
