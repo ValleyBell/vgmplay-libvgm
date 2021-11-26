@@ -80,10 +80,11 @@ set_property(CACHE MEDIA_CONTROLS PROPERTY STRINGS "OFF;WIN_KEYS;WIN_OVERLAY;DBU
 
 
 # --- INI reading ---
-include(FindPkgConfig OPTIONAL)
+find_package(FindPkgConfig QUIET)
 if(PKG_CONFIG_FOUND)
 	pkg_check_modules(INIH inih)
-else()
+endif()
+if(NOT INIH_FOUND)
 	set(INIH_DIR libs/inih)
 	set(HEADERS ${HEADERS}
 			${INIH_DIR}/ini.h
