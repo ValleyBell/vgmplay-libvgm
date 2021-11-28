@@ -134,6 +134,10 @@ set(PLAYER_FILES
 set(PLAYER_LIBS)
 set(PLAYER_DEFS)
 
+if(CMAKE_COMPILER_IS_GNUCC AND WIN32)
+	list(APPEND PLAYER_LIBS -municode)
+endif()
+
 # media control
 list(APPEND PLAYER_HEADERS mediactrl.hpp)
 list(APPEND PLAYER_FILES mediactrl.cpp)
