@@ -79,22 +79,24 @@ set(MEDIA_CONTROLS "${MC_DEFAULT}" CACHE STRING "enable Media Controls")
 set_property(CACHE MEDIA_CONTROLS PROPERTY STRINGS "OFF;WIN_KEYS;WIN_OVERLAY;DBUS")
 
 
+set(HEADERS)
+set(SOURCES)
+set(INCLUDES)
+set(LIBRARIES)
+
 # --- INI reading ---
 find_package(PkgConfig QUIET)
 if(PKG_CONFIG_FOUND)
 	pkg_check_modules(INIH inih)
 endif()
-if(NOT INIH_FOUND)
+if(INIH_FOUND)
+	list(APPEND INCLUDES ${INIH_INCLUDE_DIRS})
+	list(APPEND LIBRARIES ${INIH_LDFLAGS})
+else()
 	set(INIH_DIR libs/inih)
-	set(HEADERS ${HEADERS}
-			${INIH_DIR}/ini.h
-		)
-	set(SOURCES ${SOURCES}
-			${INIH_DIR}/ini.c
-		)
-	set(INCLUDES ${INCLUDES}
-			${INIH_DIR}
-		)
+	list(APPEND HEADERS ${INIH_DIR}/ini.h)
+	list(APPEND SOURCES ${INIH_DIR}/ini.c)
+	list(APPEND INCLUDES ${INIH_DIR})
 endif()
 
 
@@ -102,15 +104,9 @@ endif()
 if(MSVC)
 	# not using add_subdirectory(), because I don't want to install it
 	set(WINGETOPT_DIR libs/wingetopt/src)
-	set(HEADERS ${HEADERS}
-			${WINGETOPT_DIR}/getopt.h
-		)
-	set(SOURCES ${SOURCES}
-			${WINGETOPT_DIR}/getopt.c
-		)
-	set(INCLUDES ${INCLUDES}
-			${WINGETOPT_DIR}
-		)
+	list(APPEND HEADERS ${WINGETOPT_DIR}/getopt.h)
+	list(APPEND SOURCES ${WINGETOPT_DIR}/getopt.c)
+	list(APPEND INCLUDES ${WINGETOPT_DIR})
 endif()	# wingetopt
 
 
@@ -164,10 +160,6 @@ add_executable(${PROJECT_NAME} ${HEADERS} ${SOURCES} ${PLAYER_HEADERS} ${PLAYER_
 target_compile_definitions(${PROJECT_NAME} PRIVATE ${PLAYER_DEFS})
 target_include_directories(${PROJECT_NAME} PRIVATE ${PROJECT_SOURCE_DIR} ${INCLUDES})
 target_link_libraries(${PROJECT_NAME} PRIVATE ${LIBRARIES} libvgm::vgm-utils libvgm::vgm-audio libvgm::vgm-emu libvgm::vgm-player ${PLAYER_LIBS})
-if(INIH_FOUND)
-	target_include_directories(${PROJECT_NAME} PRIVATE ${INIH_INCLUDE_DIRS})
-	target_link_libraries(${PROJECT_NAME} PUBLIC ${INIH_LDFLAGS})
-endif(INIH_FOUND)
 install(TARGETS ${PROJECT_NAME} RUNTIME DESTINATION "bin")
 #add_sanitizers(${PROJECT_NAME})
 
