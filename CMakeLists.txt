@@ -12,9 +12,6 @@ project(vgmplay VERSION 0.5 LANGUAGES C CXX)
 #set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${PROJECT_BINARY_DIR}/bin)
 #set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${PROJECT_BINARY_DIR}/bin)
 
-find_package(ZLIB REQUIRED)
-find_package(Threads REQUIRED)
-find_package(Iconv QUIET)
 find_package(libvgm REQUIRED)
 
 if(MSVC)
