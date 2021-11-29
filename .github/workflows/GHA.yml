@@ -1,0 +1,76 @@
+name: Build Tests
+
+on:
+  push:
+    branches: [ master ]
+  pull_request:
+    branches: [ master ]
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        config:
+          - { os: windows-latest, build_type: Release, shell: bash, compiler: msvc, extra_settings: '-A Win32' }
+          - { os: windows-latest, build_type: Debug, shell: bash, compiler: msvc, extra_settings: '-A Win32' }
+          #- { os: windows-latest, build_type: Release, shell: bash, compiler: msvc, extra_settings: '-A x64' }
+          #- { os: windows-latest, build_type: Debug, shell: bash, compiler: msvc, extra_settings: '-A x64' }
+          - { os: windows-latest, build_type: Release, shell: "msys2 {0}", compiler: mingw, extra_settings: '-G "MSYS Makefiles"' }
+          - { os: windows-latest, build_type: Debug, shell: "msys2 {0}", compiler: mingw, extra_settings: '-G "MSYS Makefiles"' }
+          - { os: macos-latest, build_type: Release, shell: bash }
+          - { os: macos-latest, build_type: Debug, shell: bash }
+          - { os: ubuntu-latest, build_type: Release, shell: bash }
+          - { os: ubuntu-latest, build_type: Debug, shell: bash }
+      fail-fast: false
+
+    runs-on: ${{ matrix.config.os }}
+    defaults:
+      run:
+        shell: ${{ matrix.config.shell }}
+
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v2
+      with:
+        submodules: recursive
+
+    - name: Build libvgm
+      uses: ./libvgm/.github/workflows/action-build-libvgm
+      with:
+        checkout_path: ${{ github.workspace }}/libvgm
+        install_path: ${{ github.workspace }}/libvgm/install
+        build_type: ${{ matrix.config.build_type }}
+        with_msvc: ${{ matrix.config.compiler == 'msvc' }}
+        extra_settings: ${{ matrix.config.extra_settings }}
+
+    - name: Dependencies [Linux]
+      if: runner.os == 'Linux'
+      run: |
+        sudo apt install \
+          libinih-dev
+
+    - name: Configure
+      run: |
+        export CMAKE_MODULE_PATH="${GITHUB_WORKSPACE}/libvgm/install/lib/cmake"${CMAKE_MODULE_PATH:+':'}$CMAKE_MODULE_PATH
+        cmake ${{ matrix.config.extra_settings }} \
+          -B ${GITHUB_WORKSPACE}/build \
+          -DCMAKE_INSTALL_PREFIX=${GITHUB_WORKSPACE}/install \
+          -DCMAKE_BUILD_TYPE=${{ matrix.config.build_type }} \
+          ${CMAKE_OPTS}
+
+    - name: Build
+      run: |
+        cmake \
+          --build ${GITHUB_WORKSPACE}/build \
+          --config ${{ matrix.config.build_type }} \
+          --parallel 2
+
+    - name: Install
+      run: |
+        cmake \
+          --install ${GITHUB_WORKSPACE}/build \
+          --config ${{ matrix.config.build_type }}
