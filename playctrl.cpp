@@ -7,6 +7,10 @@
 #include <string>
 #include <math.h>
 
+#ifndef M_LN2
+#define M_LN2	0.693147180559945309417
+#endif
+
 #ifdef _WIN32
 
 //#define _WIN32_WINNT	0x500	// for GetConsoleWindow()

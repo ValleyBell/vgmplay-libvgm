@@ -7,6 +7,7 @@ VGMPlay v0.50.2
 * fixed setting Windows console title (broken since 0.50.1)
 + added support for Windows 10 media control (showing track title / album art)
 * updated Pokey MAME sound core (thanks jprjr)
+  Regression note: Emulation of joined channels seems to be broken in the new version.
 * fixed some crashes with broken VGMs
 * improved S98 Delta-T sample playback (fixed ADPCM RAM initialization)
 * ported YM2612 Genesis GX FM emulation back to YM2203/YM2608/YM2610

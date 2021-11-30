@@ -75,7 +75,7 @@ else()
 	set(MC_DEFAULT "OFF")
 endif()
 set(MEDIA_CONTROLS "${MC_DEFAULT}" CACHE STRING "enable Media Controls")
-set_property(CACHE MEDIA_CONTROLS PROPERTY STRINGS "OFF;WIN_KEYS;WIN_OVERLAY;DBUS")
+set_property(CACHE MEDIA_CONTROLS PROPERTY STRINGS "OFF;WIN_KEYS;WIN_SMTC;DBUS")
 
 
 set(HEADERS)
@@ -140,7 +140,7 @@ if(MEDIA_CONTROLS STREQUAL "WIN_KEYS")
 	list(APPEND PLAYER_HEADERS mediactrl_WinKeys.hpp)
 	list(APPEND PLAYER_FILES mediactrl_WinKeys.cpp)
 	list(APPEND PLAYER_DEFS MEDIACTRL_WINKEYS)
-elseif(MEDIA_CONTROLS STREQUAL "WIN_OVERLAY")
+elseif(MEDIA_CONTROLS STREQUAL "WIN_SMTC")
 	list(APPEND PLAYER_HEADERS mediactrl_WinKeys.hpp mediactrl_WinSMTC.hpp)
 	list(APPEND PLAYER_FILES mediactrl_WinKeys.cpp mediactrl_WinSMTC.cpp)
 	list(APPEND PLAYER_LIBS runtimeobject)	# for WindowsCreateStringReference, RoGetActivationFactory
