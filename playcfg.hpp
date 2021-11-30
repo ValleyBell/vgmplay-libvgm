@@ -7,6 +7,7 @@
 struct GeneralOptions
 {
 	UINT32 smplRate;
+	UINT8 smplBits;
 	UINT32 pbRate;
 	double volume;
 	UINT32 maxLoops;

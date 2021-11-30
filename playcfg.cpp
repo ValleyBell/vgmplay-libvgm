@@ -241,6 +241,7 @@ static void ParseCfg_General(GeneralOptions& opts, const CfgSection& cfg)
 	CfgSection::Unordered::const_iterator ceIt;	// config entry iterator
 	
 	opts.smplRate =		(UINT32)Cfg_GetUIntOrDefault(ceList, "SampleRate", 44100);
+	opts.smplBits =		 (UINT8)Cfg_GetUIntOrDefault(ceList, "SampleBits", 16);
 	opts.pbRate =		(UINT32)Cfg_GetUIntOrDefault(ceList, "PlaybackRate", 0);
 	opts.volume =		(double)Cfg_GetFloatOrDefault(ceList, "Volume", 1.0);
 	opts.maxLoops =		(UINT32)Cfg_GetUIntOrDefault(ceList, "MaxLoops", 2);

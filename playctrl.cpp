@@ -1396,7 +1396,7 @@ static UINT8 InitAudioSystem(void)
 		retVal = InitAudioDriver(&adOut);
 		if (retVal)
 		{
-			fprintf(stderr, "Audio Driver Init Error: %02X\n", retVal);
+			fprintf(stderr, "Audio Driver Init Error 0x%02X\n", retVal);
 			Audio_Deinit();
 			return retVal;
 		}
@@ -1430,7 +1430,7 @@ static UINT8 InitAudioSystem(void)
 		retVal = InitAudioDriver(&adLog);
 		if (retVal)
 		{
-			fprintf(stderr, "Audio Driver Init Error: %02X\n", retVal);
+			fprintf(stderr, "Audio Driver Init Error 0x%02X\n", retVal);
 			if (adOut.data == NULL)	// cancel only when not playing back
 			{
 				Audio_Deinit();
@@ -1482,7 +1482,7 @@ static UINT8 StartAudioDevice(void)
 		return 0xFF;
 	opts->sampleRate = genOpts.smplRate;
 	opts->numChannels = 2;
-	opts->numBitsPerSmpl = 16;
+	opts->numBitsPerSmpl = genOpts.smplBits;
 	if (genOpts.audBufTime)
 		opts->usecPerBuf = genOpts.audBufTime * 1000;
 	if (genOpts.audBufCnt)
@@ -1497,7 +1497,7 @@ static UINT8 StartAudioDevice(void)
 		retVal = AudioDrv_Start(adOut.data, adOut.deviceID);
 		if (retVal)
 		{
-			fprintf(stderr, "Device Init Error: %02X\n", retVal);
+			fprintf(stderr, "Device Init Error 0x%02X\n", retVal);
 			return retVal;
 		}
 		
@@ -1511,8 +1511,25 @@ static UINT8 StartAudioDevice(void)
 	}
 	
 	audioBuf.resize(localBufSize);
-	mediaInfo._player.SetOutputSettings(opts->sampleRate, opts->numChannels, opts->numBitsPerSmpl, smplAlloc);
-	
+	retVal = mediaInfo._player.SetOutputSettings(opts->sampleRate, opts->numChannels, opts->numBitsPerSmpl, smplAlloc);
+	if (retVal)
+	{
+		const char* errMsg = NULL;
+		
+		if (adOut.data != NULL)
+			AudioDrv_Stop(adOut.data);
+		
+		if (retVal == 0xF0)
+			errMsg = "Invalid number of channels.";
+		else if (retVal == 0xF1)
+			errMsg = "Unsupported sample bit depth.";
+		if (errMsg != NULL)
+			fprintf(stderr, "Render Engine Error: %s\n", errMsg);
+		else
+			fprintf(stderr, "Render Engine Error: 0x%02X\n", retVal);
+		return retVal;
+	}
+
 	return AERR_OK;
 }
 

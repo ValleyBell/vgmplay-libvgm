@@ -10,14 +10,16 @@ VGMPlay v0.50.2
 * fixed some crashes with broken VGMs
 * improved S98 Delta-T sample playback (fixed ADPCM RAM initialization)
 * ported YM2612 Genesis GX FM emulation back to YM2203/YM2608/YM2610
-* fixed VGMPlay ignoring the VGM "Loop Modifer" and "Loop Base" settings
+* fixed VGMPlay/in_vgm ignoring the VGM "Loop Modifer" and "Loop Base" settings
 * updated C6280 Ootake and MAME cores, fixes PC-Engine "Fire Pro Wrestling" series
 * fixed wrong default options that caused NES FDS to be muted
 + restored ShowStreamCmds option
 + added volume control via Cursor Up/Down
 + added option to pause (Ctrl + P) or quit (Ctrl + X) after the current track
-* fixed VGMPlay keeping files open during whole playback - it closes the files now when they are fully loaded
+* fixed files being kept open during whole playback - it closes the files now when they are fully loaded
 + added full support for GYM files
++ added option to enable warnings from file parsers and sound cores
++ added option for changing output sample bit depth
 
 
 VGMPlay v0.50.1
