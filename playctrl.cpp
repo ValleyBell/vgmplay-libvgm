@@ -1601,6 +1601,7 @@ static void InitMediaControls(void)
 #ifdef MEDIACTRL_DBUS
 		MCTRLSIG_DBUS,
 #endif
+		MCTRLSIG_NONE,
 	};
 	UINT8 retVal = 0x00;
 	

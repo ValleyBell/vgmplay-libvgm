@@ -4,7 +4,7 @@
 #include <fstream>
 #include <istream>
 #ifdef _WIN32
-#include <Windows.h>	// for file name charset conversion
+#include <windows.h>	// for file name charset conversion
 #include <wchar.h>	// for UTF-16 file name functions
 #endif
 #include <utils/StrUtils.h>
@@ -86,6 +86,7 @@ UINT8 ParseSongFiles(size_t argc, const char* const* argv, std::vector<SongFileL
 			if (! retValB)
 			{
 				resVal |= 0x01;
+				u8printf("Unable to load playlist: %s\n", fileName);
 				continue;
 			}
 			
@@ -106,7 +107,7 @@ UINT8 ParseSongFiles(size_t argc, const char* const* argv, std::vector<SongFileL
 		}
 	}
 	
-	return 0x00;
+	return resVal;
 }
 
 static bool ReadM3UPlaylist(const char* fileName, std::vector<SongFileList>& songList, bool isM3Uu8)
@@ -128,6 +129,15 @@ static bool ReadM3UPlaylist(const char* fileName, std::vector<SongFileList>& son
 	fileNameW.resize(MultiByteToWideChar(CP_UTF8, 0, fileName, -1, NULL, 0) - 1);
 	MultiByteToWideChar(CP_UTF8, 0, fileName, -1, &fileNameW[0], fileNameW.size());
 	hFile.open(fileNameW.c_str());	// use "const wchar_t*" for MinGW implementations without wstring overload
+#elif defined(_WIN32)
+	// fallback for Windows when no ifstream::open(wchar_t*) is available (e.g. MS VC6)
+	std::wstring fileNameW;
+	std::string fileNameA;
+	fileNameW.resize(MultiByteToWideChar(CP_UTF8, 0, fileName, -1, NULL, 0) - 1);
+	MultiByteToWideChar(CP_UTF8, 0, fileName, -1, &fileNameW[0], fileNameW.size());
+	fileNameA.resize(WideCharToMultiByte(CP_ACP, 0, fileNameW.c_str(), -1, NULL, 0, NULL, NULL) - 1);
+	WideCharToMultiByte(CP_ACP, 0, fileNameW.c_str(), -1, &fileNameA[0], fileNameA.size(), NULL, NULL);
+	hFile.open(fileNameA.c_str());
 #else
 	hFile.open(fileName);
 #endif

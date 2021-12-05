@@ -1,7 +1,5 @@
 // TODO:
-//	xx soundWhilePaused ("EmulatePause")
 //	- catch Ctrl+C
-//	- config entry for "Media Control" features
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -188,7 +186,11 @@ int main(int argc, char* argv[])
 		retVal = ParseSongFiles(fileList, songList, plList);
 	}
 	if (retVal)
+	{
 		printf("One or more playlists couldn't be read!\n");
+		if (! songList.empty())	// only wait when we won't exit immediately after
+			getchar();
+	}
 	if (songList.empty())
 	{
 		printf("No songs to play.\n");
