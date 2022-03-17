@@ -22,6 +22,7 @@
 #include <emu/EmuCores.h>
 #include <emu/EmuStructs.h>	// for DEVRI_SRMODE_* constants
 #include <emu/cores/2612intf.h>
+#include <emu/cores/ayintf.h>
 #include <emu/cores/gb.h>
 #include <emu/cores/nesintf.h>
 #include <emu/cores/okim6258.h>
@@ -673,6 +674,9 @@ static void ParseCfg_ChipSection(ChipOptions& opts, const CfgSection& cfg, UINT8
 		break;
 	case DEVID_YMF278B:
 		opts.chipDisable |= Cfg_GetBoolOrDefault(ceuList, "DisableFM", false) ? 0x02 : 0x00;
+		break;
+	case DEVID_AY8910:
+		opts.addOpts = Cfg_GetBoolOrDefault(ceuList, "PCM3chDetect", true) ? OPT_AY8910_PCM3CH_DETECT : 0x00;
 		break;
 	case DEVID_GB_DMG:
 		opts.addOpts = Cfg_GetBoolOrDefault(ceuList, "BoostWaveChn", true) ? OPT_GB_DMG_BOOST_WAVECH : 0x00;

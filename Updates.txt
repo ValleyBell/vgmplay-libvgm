@@ -1,4 +1,14 @@
-VGMPlay v0.50.2
+VGMPlay v0.51.1
+---------------
+* fixed opening playlists with Unicode characters when compiling with old MSVC versions
+* fixed VGM v1.00/1.01 files not playing YM2612 and YM2151 data
++ added per-channel panning support for NES APU (NSFPlay + MAME cores)
++ added an option to disable per-channel panning on AY8910 when 3-channel PCM is used
+
+[TODO]+ add playback speed control
+
+
+VGMPlay v0.51.0
 ---------------
 * fixed broken FM3 multi-frequency mode in YM2612 GPGX core (the default core)
 * fixed audio glitches at the beginning of certain VGMs from Project2612 (i.e. I made a hack to the YM2612 GPGX core)
