@@ -1,6 +1,7 @@
 #ifndef __MEDIACTRL_DBUS_HPP__
 #define __MEDIACTRL_DBUS_HPP__
 
+#include <string>
 #include <stdtype.h>
 #include "mediactrl.hpp"
 
@@ -13,6 +14,7 @@ public:
 	void Deinit(void);
 protected:
 	void SignalHandler(UINT8 signalMask);
+	std::string _dbus_name;
 };
 
 #endif	// __MEDIACTRL_DBUS_HPP__

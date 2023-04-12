@@ -17,6 +17,8 @@ They weren't lying when they said that using libdbus directly signs you up for s
 #include <string>
 #include <vector>
 #include <dbus/dbus.h>
+#include <sys/types.h>
+#include <unistd.h>
 
 #include <stdtype.h>
 #include <player/playera.hpp>
@@ -30,7 +32,6 @@ They weren't lying when they said that using libdbus directly signs you up for s
 #define DBUS_MPRIS_PATH             "/org/mpris/MediaPlayer2"
 #define DBUS_MPRIS_MEDIAPLAYER2     "org.mpris.MediaPlayer2"
 #define DBUS_MPRIS_PLAYER           DBUS_MPRIS_MEDIAPLAYER2 ".Player"
-#define DBUS_MPRIS_VGMPLAY          DBUS_MPRIS_MEDIAPLAYER2 ".vgmplay"
 #define DBUS_PROPERTIES             "org.freedesktop.DBus.Properties"
 
 //#define DBUS_DEBUG
@@ -969,8 +970,16 @@ UINT8 MediaCtrlDBus::Init(MediaInfo& mediaInfo)
 	if(!connection)
 		return 0x00;
 
+	_dbus_name.resize(0x80);
+	pid_t pid = getpid();
+	int nameSize = snprintf(&_dbus_name[0], _dbus_name.size(), "%s.%s.instance%d", DBUS_MPRIS_MEDIAPLAYER2, "vgmplay", pid);
+	if (nameSize >= 0)
+		_dbus_name.resize((size_t)nameSize);
+#ifdef DBUS_DEBUG
+	printf("DBus Instance Name: %s\n", _dbus_name.c_str());
+#endif
 	// If we're not the owners, don't bother with anything else
-	if(dbus_bus_request_name(connection, DBUS_MPRIS_VGMPLAY, DBUS_NAME_FLAG_DO_NOT_QUEUE, NULL) != DBUS_REQUEST_NAME_REPLY_PRIMARY_OWNER)
+	if(dbus_bus_request_name(connection, _dbus_name.c_str(), DBUS_NAME_FLAG_DO_NOT_QUEUE, NULL) != DBUS_REQUEST_NAME_REPLY_PRIMARY_OWNER)
 	{
 		dbus_connection_unref(connection);
 		connection = NULL;
