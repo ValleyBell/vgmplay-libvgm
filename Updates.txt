@@ -4,8 +4,16 @@ VGMPlay v0.51.1
 * fixed VGM v1.00/1.01 files not playing YM2612 and YM2151 data
 + added per-channel panning support for NES APU (NSFPlay + MAME cores)
 + added an option to disable per-channel panning on AY8910 when 3-channel PCM is used
-
-[TODO]+ add playback speed control
+* slightly improved YMF278B emulation (thanks grauw)
+* fixed X1-010 issue with playing back long samples (256 KB)
+* updated MAME sound cores: ES5503, GameBoy, K051649, K053260, K054539, NES APU, YMW258
+* improved uPD7759 playback of Sega Pico PCM data
+* improved OKIM6258 playback (try to be more tolerant with race conditions)
+* VGMs with "YM3438" header flag set will now force NukedOPN2's YM3438 mode
+* updated EMU2413 (thanks Mitsutaka Okazaki)
+* support more chips for PCM streams embedded in VGMs
+* added "Mikey" sound chip from Atari Lynx (thanks laoo)
++ added playback speed control
 
 
 VGMPlay v0.51.0

@@ -34,6 +34,8 @@
 #define MI_EVT_SEEK_PERC	0x12	// absolute seeking (in percent)
 #define MI_EVT_VOL_SET		0x20
 #define MI_EVT_VOL_CHG		0x21
+#define MI_EVT_SPD_SET		0x30
+#define MI_EVT_SPD_CHG		0x31
 
 class MediaInfo;
 typedef void (*MI_SIGNAL_CB)(MediaInfo* mInfo, void* userParam, UINT8 signalMask);

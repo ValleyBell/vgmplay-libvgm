@@ -145,6 +145,7 @@ static size_t curSong;
 static MediaInfo mediaInfo;
 static MediaControl* mediaCtrl = NULL;
 static INT32 masterVol;
+static double masterSpeed;
 static INT32 noDispTime;
 static bool pauseAfterEnd;
 static bool quitAfterEnd;
@@ -228,6 +229,7 @@ UINT8 PlayerMain(UINT8 showFileName)
 	}
 	mediaInfo._pbSongCnt = songList.size();
 	masterVol = myPlayer.GetMasterVolume();
+	masterSpeed = myPlayer.GetPlaybackSpeed();
 	
 	mediaInfo._enableAlbumImage = false;	// disable by default, MediaCtrl objects will enable it on demand
 	//mediaInfo.AddSignalCallback(SignalCB, NULL);
@@ -921,6 +923,30 @@ static UINT8 HandleCtrlEvent(UINT8 evtType, INT32 evtParam)
 			noDispTime = 1000;
 		}
 		break;
+	case MI_EVT_SPD_SET:
+		masterSpeed = evtParam;
+		OSMutex_Lock(renderMtx);
+		mediaInfo._player.SetPlaybackSpeed(masterSpeed);
+		OSMutex_Unlock(renderMtx);
+		printf("Speed: %6.3fx%*s    \r", masterSpeed, 29, "");	fflush(stdout);
+		noDispTime = 1000;
+		break;
+	case MI_EVT_SPD_CHG:
+		{
+			int logSpeed = (int)floor(log(masterSpeed) / M_LN2 * 0x100 + 0.5);
+			logSpeed += evtParam;
+			if (logSpeed < -0x600)
+				logSpeed = -0x600;
+			else if (logSpeed > +0x600)
+				logSpeed = +0x600;
+			masterSpeed = pow(2.0, logSpeed / (double)0x100);
+		}
+		OSMutex_Lock(renderMtx);
+		mediaInfo._player.SetPlaybackSpeed(masterSpeed);
+		OSMutex_Unlock(renderMtx);
+		printf("Speed: %6.3fx%*s    \r", masterSpeed, 29, "");	fflush(stdout);
+		noDispTime = 1000;
+		break;
 	}
 	
 	return 0x00;
@@ -1104,10 +1130,27 @@ static UINT8 HandleKeyPress(bool waitForKey)
 	case KEY_CTRL | KEY_UP:
 	case KEY_CTRL | KEY_DOWN:
 		{
-			INT32 amount = (keyCode & KEY_CTRL) ? 30 : 2;
+			INT32 amount = (keyCode & KEY_CTRL) ? 30 : 2;	// 0.2 db [not ctrl] or 3.0 db [ctrl]
 			if ((keyCode & KEY_MASK) == KEY_DOWN)
-				amount *= -1;	// seek back
+				amount *= -1;	// volume down
 			mediaInfo.Event(MI_EVT_VOL_CHG, amount);
+		}
+		break;
+	case '[':
+	case ']':
+	case '{':
+	case '}':
+		{
+			INT32 amount = 0;
+			if (keyCode == '[')
+				amount = -0x10;		// 1/16th slower
+			else if (keyCode == ']')
+				amount = +0x10;		// 1/16th faster
+			else if (keyCode == '{')
+				amount = -0x100;	// half the speed
+			else if (keyCode == '}')
+				amount = +0x100;	// double the speed
+			mediaInfo.Event(MI_EVT_SPD_CHG, amount);
 		}
 		break;
 	default:

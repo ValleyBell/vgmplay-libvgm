@@ -245,6 +245,7 @@ static void ParseCfg_General(GeneralOptions& opts, const CfgSection& cfg)
 	opts.smplBits =		 (UINT8)Cfg_GetUIntOrDefault(ceList, "SampleBits", 16);
 	opts.pbRate =		(UINT32)Cfg_GetUIntOrDefault(ceList, "PlaybackRate", 0);
 	opts.volume =		(double)Cfg_GetFloatOrDefault(ceList, "Volume", 1.0);
+	opts.pbSpeed =		(double)Cfg_GetFloatOrDefault(ceList, "PlaybackSpeed", 1.0);
 	opts.maxLoops =		(UINT32)Cfg_GetUIntOrDefault(ceList, "MaxLoops", 2);
 	
 	opts.resmplMode =	 (UINT8)Cfg_GetUIntOrDefault(ceList, "ResamplingMode", 0);
@@ -715,7 +716,7 @@ void ApplyCfg_General(PlayerA& player, const GeneralOptions& opts)
 	pwCfg.loopCount = opts.maxLoops;
 	pwCfg.fadeSmpls = MulDivRoundU32(opts.fadeTime_single, opts.smplRate, 1000);
 	pwCfg.endSilenceSmpls = MulDivRoundU32(opts.pauseTime_jingle, opts.smplRate, 1000);
-	pwCfg.pbSpeed = 1.0;
+	pwCfg.pbSpeed = opts.pbSpeed;
 	player.SetConfiguration(pwCfg);
 	
 	for (curPlr = 0; curPlr < plrs.size(); curPlr ++)
