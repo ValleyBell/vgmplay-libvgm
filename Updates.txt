@@ -13,7 +13,8 @@ VGMPlay v0.51.1
 * updated EMU2413 (thanks Mitsutaka Okazaki)
 * support more chips for PCM streams embedded in VGMs
 * added "Mikey" sound chip from Atari Lynx (thanks laoo)
-+ added playback speed control
++ added playback speed control (change speed via { } [ and ])
++ restored "ResamplingMode" option (was unimplemented before)
 
 
 VGMPlay v0.51.0

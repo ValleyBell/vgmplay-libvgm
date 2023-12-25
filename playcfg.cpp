@@ -106,6 +106,7 @@ static const ChipCfgSectDef CFG_CHIP_LIST[] =
 	{	DEVID_X1_010,	"X1-010"},
 	{	DEVID_C352,		"C352"},
 	{	DEVID_GA20,		"GA20"},
+	{	DEVID_MIKEY,	"Mikey"},
 };
 static const size_t CFG_CHIP_COUNT = sizeof(CFG_CHIP_LIST) / sizeof(CFG_CHIP_LIST[0]);
 
