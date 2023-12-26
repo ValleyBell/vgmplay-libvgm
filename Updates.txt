@@ -2,8 +2,10 @@ VGMPlay v0.51.1
 ---------------
 * fixed opening playlists with Unicode characters when compiling with old MSVC versions
 * fixed VGM v1.00/1.01 files not playing YM2612 and YM2151 data
+* fixed missing "AY8910 hard panning" commands, fixes missing panning in songs from "Ultima" series on Apple II
 + added per-channel panning support for NES APU (NSFPlay + MAME cores)
 + added an option to disable per-channel panning on AY8910 when 3-channel PCM is used
+* fixed MPRIS/DBus handling when multiple instances of VGMPlay are running
 * slightly improved YMF278B emulation (thanks grauw)
 * fixed X1-010 issue with playing back long samples (256 KB)
 * updated MAME sound cores: ES5503, GameBoy, K051649, K053260, K054539, NES APU, YMW258
