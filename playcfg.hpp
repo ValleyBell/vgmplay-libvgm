@@ -26,6 +26,7 @@ struct GeneralOptions
 	bool soundWhilePaused;
 	bool pseudoSurround;
 	bool preferJapTag;
+	UINT8 timeDispStyle;
 	bool showDevCore;
 	bool setTermTitle;
 	UINT8 mediaKeys;

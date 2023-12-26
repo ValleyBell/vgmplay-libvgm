@@ -317,7 +317,7 @@ UINT8 PlayerMain(UINT8 showFileName)
 		mediaInfo.EnumerateChips();
 		myPlayer.Render(0, NULL);	// process first sample
 		mediaInfo._fileStartPos = myPlayer.GetCurPos(PLAYPOS_FILEOFS);	// get position after processing initialization block
-		timeDispMode = GetTimeDispMode(myPlayer.GetTotalTime(0));
+		timeDispMode = GetTimeDispMode(myPlayer.GetTotalTime(genOpts.timeDispStyle));
 		if (genOpts.setTermTitle)
 			ShowConsoleTitle();
 		ShowSongInfo();
@@ -628,8 +628,8 @@ static UINT8 PlayFile(void)
 			{
 				printf("%s%6.2f%%  %s / %s seconds  \r", pState,
 					100.0 * dataPos / dataLen,
-					GetTimeStr(myPlayer.GetCurTime(0), timeDispMode).c_str(),
-					GetTimeStr(myPlayer.GetTotalTime(0), timeDispMode).c_str());
+					GetTimeStr(myPlayer.GetCurTime(genOpts.timeDispStyle), timeDispMode).c_str(),
+					GetTimeStr(myPlayer.GetTotalTime(genOpts.timeDispStyle), timeDispMode).c_str());
 			}
 			else
 			{
@@ -641,8 +641,8 @@ static UINT8 PlayFile(void)
 					pbMode += 'L';	// looping
 				printf("%s%6.2f%%  %s / %s seconds", pState,
 					100.0 * dataPos / dataLen,
-					GetTimeStr(myPlayer.GetCurTime(0), timeDispMode).c_str(),
-					GetTimeStr(myPlayer.GetTotalTime(0), timeDispMode).c_str());
+					GetTimeStr(myPlayer.GetCurTime(genOpts.timeDispStyle), timeDispMode).c_str(),
+					GetTimeStr(myPlayer.GetTotalTime(genOpts.timeDispStyle), timeDispMode).c_str());
 				if (genOpts.showStrmCmds == 0x01)
 					printf("  %02X / %02X %s", 1 + strmDev->lastItem, strmDev->maxItems, pbMode.c_str());
 				else if (genOpts.showStrmCmds == 0x02)
@@ -688,8 +688,9 @@ static UINT8 PlayFile(void)
 			// TODO: Thread-safety
 			if (! (mediaInfo._playState & PLAYSTATE_PAUSE) && ! (myPlayer.GetState() & PLAYSTATE_FADE))
 			{
-				double fadeStart = myPlayer.GetTotalTime(1) - genOpts.fadeTime_single / 1500.0;
-				if (myPlayer.GetCurTime(1) >= fadeStart)
+				const UINT8 timeFlags = PLAYTIME_LOOP_INCL | PLAYTIME_TIME_PBK;
+				double fadeStart = myPlayer.GetTotalTime(timeFlags) - genOpts.fadeTime_single / 1500.0;
+				if (myPlayer.GetCurTime(timeFlags) >= fadeStart)
 				{
 					myPlayer.SetFadeSamples(MSec2Samples(genOpts.fadeTime_single, myPlayer));
 					myPlayer.FadeOut();	// (FadeTime / 1500) ends at 33%
@@ -857,6 +858,8 @@ static UINT8 HandleCtrlEvent(UINT8 evtType, INT32 evtParam)
 		OSMutex_Lock(renderMtx);
 		{
 			UINT32 destPos = mediaInfo._player.GetCurPos(PLAYPOS_SAMPLE);
+			if ((genOpts.timeDispStyle & PLAYTIME_TIME_PBK) == PLAYTIME_TIME_FILE)
+				evtParam = (INT32)(evtParam / mediaInfo._player.GetPlaybackSpeed() + 0.5);	// scale according to playback speed
 			if (evtParam < 0 && (UINT32)-evtParam > destPos)
 				destPos = 0;
 			else

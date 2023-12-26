@@ -265,6 +265,7 @@ static void ParseCfg_General(GeneralOptions& opts, const CfgSection& cfg)
 	opts.soundWhilePaused =	  (bool)Cfg_GetBoolOrDefault(ceList, "EmulatePause", false);
 	opts.pseudoSurround =	  (bool)Cfg_GetBoolOrDefault(ceList, "SurroundSound", false);
 	opts.preferJapTag =		  (bool)Cfg_GetBoolOrDefault(ceList, "PreferJapTag", false);
+	opts.timeDispStyle =	 (UINT8)Cfg_GetUIntOrDefault(ceList, "TimeDisplayStyle", 0x00);
 	opts.showDevCore =		  (bool)Cfg_GetBoolOrDefault(ceList, "ShowChipCore", false);
 	opts.setTermTitle =		  (bool)Cfg_GetBoolOrDefault(ceList, "SetTerminalTitle", true);
 	opts.mediaKeys =		        Cfg_MediaKeys_Str2UInt(Cfg_GetStrOrDefault(ceList, "MediaKeys", "Default"));
@@ -681,7 +682,8 @@ static void ParseCfg_ChipSection(ChipOptions& opts, const CfgSection& cfg, UINT8
 		opts.addOpts = Cfg_GetBoolOrDefault(ceuList, "PCM3chDetect", true) ? OPT_AY8910_PCM3CH_DETECT : 0x00;
 		break;
 	case DEVID_GB_DMG:
-		opts.addOpts = Cfg_GetBoolOrDefault(ceuList, "BoostWaveChn", true) ? OPT_GB_DMG_BOOST_WAVECH : 0x00;
+		opts.addOpts  = Cfg_GetBoolOrDefault(ceuList, "BoostWaveChn", true) ? OPT_GB_DMG_BOOST_WAVECH : 0x00;
+		opts.addOpts |= Cfg_GetBoolOrDefault(ceuList, "NoWaveCorrupt", false) ? OPT_GB_DMG_NO_WAVE_CORRUPT : 0x00;
 		break;
 	case DEVID_NES_APU:
 		opts.addOpts  = (Cfg_GetUIntOrDefault(ceuList, "SharedOpts", 0x03) & 0x03) << 0;
