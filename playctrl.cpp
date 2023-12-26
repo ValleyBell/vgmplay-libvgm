@@ -899,7 +899,7 @@ static UINT8 HandleCtrlEvent(UINT8 evtType, INT32 evtParam)
 		{
 			double vol = masterVol / (double)0x10000;
 			double volDB = log(vol) / M_LN2 * 6.0;
-			printf("Volume: %.3f (%+5.1f db)%*s    \r", vol, volDB, 19, "");	fflush(stdout);
+			printf("Volume: %.3f (%+5.1f db)%*s  \r", vol, volDB, 19, "");	fflush(stdout);
 			noDispTime = 1000;
 		}
 		break;
@@ -919,7 +919,7 @@ static UINT8 HandleCtrlEvent(UINT8 evtType, INT32 evtParam)
 		{
 			double vol = masterVol / (double)0x10000;
 			double volDB = log(vol) / M_LN2 * 6.0;
-			printf("Volume: %.3f (%+5.1f db)%*s    \r", vol, volDB, 19, "");	fflush(stdout);
+			printf("Volume: %.3f (%+5.1f db)%*s  \r", vol, volDB, 19, "");	fflush(stdout);
 			noDispTime = 1000;
 		}
 		break;
@@ -928,7 +928,7 @@ static UINT8 HandleCtrlEvent(UINT8 evtType, INT32 evtParam)
 		OSMutex_Lock(renderMtx);
 		mediaInfo._player.SetPlaybackSpeed(masterSpeed);
 		OSMutex_Unlock(renderMtx);
-		printf("Speed: %6.3fx%*s    \r", masterSpeed, 29, "");	fflush(stdout);
+		printf("Speed: %6.3fx%*s  \r", masterSpeed, 29, "");	fflush(stdout);
 		noDispTime = 1000;
 		break;
 	case MI_EVT_SPD_CHG:
@@ -944,7 +944,7 @@ static UINT8 HandleCtrlEvent(UINT8 evtType, INT32 evtParam)
 		OSMutex_Lock(renderMtx);
 		mediaInfo._player.SetPlaybackSpeed(masterSpeed);
 		OSMutex_Unlock(renderMtx);
-		printf("Speed: %6.3fx%*s    \r", masterSpeed, 29, "");	fflush(stdout);
+		printf("Speed: %6.3fx%*s  \r", masterSpeed, 29, "");	fflush(stdout);
 		noDispTime = 1000;
 		break;
 	}
@@ -1098,12 +1098,12 @@ static UINT8 HandleKeyPress(bool waitForKey)
 		break;
 	case KEY_CTRL | 'X':
 		quitAfterEnd = ! quitAfterEnd;
-		printf("%s after song end.%*s    \r", quitAfterEnd ? "Quitting" : "Not quitting", 19, "");	fflush(stdout);
+		printf("%s after song end.%*s  \r", quitAfterEnd ? "Quitting" : "Not quitting", 19, "");	fflush(stdout);
 		noDispTime = 1000;
 		break;
 	case KEY_CTRL | 'P':
 		pauseAfterEnd = ! pauseAfterEnd;
-		printf("%s after song end.%*s    \r", pauseAfterEnd ? "Pausing" : "Not pausing", 20, "");	fflush(stdout);
+		printf("%s after song end.%*s  \r", pauseAfterEnd ? "Pausing" : "Not pausing", 20, "");	fflush(stdout);
 		noDispTime = 1000;
 		break;
 	case KEY_LEFT:
