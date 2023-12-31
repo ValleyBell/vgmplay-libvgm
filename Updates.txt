@@ -17,6 +17,7 @@ VGMPlay v0.51.1
 * added "Mikey" sound chip from Atari Lynx (thanks laoo)
 + added playback speed control (change speed via { } [ and ])
 + restored "ResamplingMode" option (was unimplemented before)
++ added "TimeDisplayStyle" option
 
 
 VGMPlay v0.51.0

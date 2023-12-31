@@ -1,0 +1,49 @@
+VGM Player - Readme
+==========
+
+General
+-------
+Usage: Drop one or multiple file on the executable or open the program and type the filename.
+
+Supported files types are:
+- DosBox RAW OPL Files (*.dro)
+- Genecyst Sound Files (*.gym)
+- T98 Sound Log Files (*.s98)
+- Video Game Music Files (*.vgm, *.vgz)
+
+Playlist files (*.m3u) are also supported, but may only list the file types above.
+
+Keys
+----
+You can use the following keys during playback:
+
+Space / P - Pause
+ESC / Q - Quit the program
+
+Cursor Left/Right - Seek 5 seconds backward/forward
+    Ctrl+Cursor - seek 1 minute
+0..9 - jump to 0%..90% of the song (Note: This measures the "full" play time with multiple loops.)
+
+PageUp / B - Previous Track
+PageDown / N - Next Track
+R - Restart current Track
+F - Fade out
+
+Cursor Up/Down - increase/decrease volume by 0.2 db
+    Ctrl+Cursor - by 3.0 db
+
+[ / ] - decrease/increase playback speed by 1/16th
+{ / } - halve/double playback speed
+
+Ctrl+X - quit after the current song finishes
+Ctrl+P - pause after the current song finishes
+
+Note: All keys also work during silent sound logging.
+
+
+Credits
+-------
+Thanks to everyone who contributed to VGMPlay and libvgm.
+-Valley Bell
+
+In a future release, there will be a list of libraries and emulator sound cores and libraries that were used at this place.
