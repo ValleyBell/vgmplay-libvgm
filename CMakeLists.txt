@@ -1,5 +1,5 @@
 #### VGMPlay (libvgm-based) ####
-cmake_minimum_required(VERSION 3.1)
+cmake_minimum_required(VERSION 3.6)	# actual minimum is 3.3
 if(POLICY CMP0042)
 	cmake_policy(SET CMP0042 NEW)
 endif()
@@ -35,7 +35,7 @@ if(CMAKE_COMPILER_IS_GNUCC)
 
 # assume Windows 2000 and later for GetConsoleWindow API call
 if(WIN32)
-	add_compile_definitions("_WIN32_WINNT=0x500")
+	add_definitions("-D _WIN32_WINNT=0x500")
 endif()
 set(CMAKE_C_FLAGS_DEBUG "${CMAKE_C_FLAGS_DEBUG} -D_DEBUG")
 
