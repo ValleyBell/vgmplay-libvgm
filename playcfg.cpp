@@ -87,8 +87,8 @@ static const ChipCfgSectDef CFG_CHIP_LIST[] =
 	{	DEVID_NES_APU,	"NES APU"},
 	{	DEVID_YMW258,	"YMW258"},
 	{	DEVID_uPD7759,	"uPD7759"},
-	{	DEVID_OKIM6258,	"OKIM6258"},
-	{	DEVID_OKIM6295,	"OKIM6295"},
+	{	DEVID_MSM6258,	"MSM6258"},
+	{	DEVID_MSM6295,	"MSM6295"},
 	{	DEVID_K051649,	"K051649"},
 	{	DEVID_K054539,	"K054539"},
 	{	DEVID_C6280,	"HuC6280"},
@@ -107,6 +107,10 @@ static const ChipCfgSectDef CFG_CHIP_LIST[] =
 	{	DEVID_C352,		"C352"},
 	{	DEVID_GA20,		"GA20"},
 	{	DEVID_MIKEY,	"Mikey"},
+	{	DEVID_K007232,	"K007232"},
+	{	DEVID_K005289,	"K005289"},
+	{	DEVID_MSM5205,	"MSM5205"},
+	{	DEVID_MSM5232,	"MSM5232"},
 };
 static const size_t CFG_CHIP_COUNT = sizeof(CFG_CHIP_LIST) / sizeof(CFG_CHIP_LIST[0]);
 
@@ -691,8 +695,8 @@ static void ParseCfg_ChipSection(ChipOptions& opts, const CfgSection& cfg, UINT8
 		opts.addOpts |= (Cfg_GetUIntOrDefault(ceuList, "DMCOpts", 0x3B) & 0x3F) << 4;
 		opts.addOpts |= (Cfg_GetUIntOrDefault(ceuList, "FDSOpts", 0x00) & 0x03) << 10;
 		break;
-	case DEVID_OKIM6258:
-		opts.addOpts = Cfg_GetBoolOrDefault(ceuList, "Enable10Bit", false) ? 0x00 : OPT_OKIM6258_FORCE_12BIT;
+	case DEVID_MSM6258:
+		opts.addOpts = Cfg_GetBoolOrDefault(ceuList, "Enable10Bit", false) ? 0x00 : OPT_MSM6258_FORCE_12BIT;
 		break;
 	case DEVID_SCSP:
 		opts.addOpts = Cfg_GetBoolOrDefault(ceuList, "BypassDSP", true) ? OPT_SCSP_BYPASS_DSP : 0x00;

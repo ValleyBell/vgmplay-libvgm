@@ -209,12 +209,13 @@ const char* MediaInfo::GetSongTagForDisp(const std::string& tagName)
 
 static inline std::string FCC2Str(UINT32 fcc)
 {
-	std::string result(4, '\0');
+	char result[5];
 	result[0] = (char)((fcc >> 24) & 0xFF);
 	result[1] = (char)((fcc >> 16) & 0xFF);
 	result[2] = (char)((fcc >>  8) & 0xFF);
 	result[3] = (char)((fcc >>  0) & 0xFF);
-	return result;
+	result[4] = '\0';
+	return std::string(result);
 }
 
 void MediaInfo::EnumerateChips(void)
@@ -227,12 +228,13 @@ void MediaInfo::EnumerateChips(void)
 	for (size_t curDev = 0; curDev < diList.size(); curDev ++)
 	{
 		const PLR_DEV_INFO& pdi = diList[curDev];
-		const char* chipName = SndEmu_GetDevName(pdi.type, 0x01, pdi.devCfg);
 		if (pdi.type == DEVID_SN76496)
 		{
-			if (pdi.devCfg->flags & 0x01)
-				curDev ++;	// the T6W28 consists of two "half" chips in VGMs
+			// the T6W28 consists of two "half" chips in VGMs
+			if ((pdi.devCfg->flags & 0x01) && (pdi.instance & 0x01))
+				continue;	// skip the 2nd instance
 		}
+		const char* chipName = SndEmu_GetDevName(pdi.type, 0x01, pdi.devCfg);
 		
 		DeviceItem dItm;
 		dItm.name = chipName;
