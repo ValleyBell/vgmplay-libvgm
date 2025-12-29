@@ -10,8 +10,7 @@
 #define strnicmp	strncasecmp
 #endif
 
-#include <stdtype.h>
-#include <common_def.h>	// for INLINE
+#include "stdtype.h"
 #include <player/playerbase.hpp>
 #include <player/s98player.hpp>
 #include <player/droplayer.hpp>
@@ -29,6 +28,7 @@
 #include <emu/cores/scsp.h>
 #include <emu/cores/c352.h>
 
+#include "utils.hpp"
 #include "config.hpp"
 #include "playcfg.hpp"
 #include "mediactrl.hpp"	// for MCTRLSIG_* constants
@@ -36,20 +36,19 @@
 
 struct ChipCfgSectDef
 {
-	UINT8 chipType;
+	DEV_ID chipType;
 	const char* entryName;
 };
 
 #define BIT_MASK(startBit, bitCnt)	(((1 << bitCnt) - 1) << startBit)
 
-INLINE UINT32 MulDivRoundU32(UINT32 val, UINT32 mul, UINT32 div)
+static inline UINT32 MulDivRoundU32(UINT32 val, UINT32 mul, UINT32 div)
 {
 	return (UINT32)(((UINT64)val * mul + (div / 2)) / div);
 }
 
 
 //void ParseConfiguration(GeneralOptions& gOpts, size_t cOptCnt, ChipOptions* cOpts, const Configuration& cfg);
-static inline UINT32 Str2FCC(const std::string& fcc);
 static inline std::string Cfg_GetStrOrDefault(const CfgSection::Unordered& ceList, const std::string& entryName, std::string defaultValue);
 static inline unsigned long Cfg_GetUIntOrDefault(const CfgSection::Unordered& ceList, const std::string& entryName, unsigned long defaultValue);
 static inline double Cfg_GetFloatOrDefault(const CfgSection::Unordered& ceList, const std::string& entryName, double defaultValue);
@@ -117,6 +116,16 @@ static const ChipCfgSectDef CFG_CHIP_LIST[] =
 static const size_t CFG_CHIP_COUNT = sizeof(CFG_CHIP_LIST) / sizeof(CFG_CHIP_LIST[0]);
 
 
+std::vector<DEV_ID> GetConfigurableDevices(void)
+{
+	std::vector<DEV_ID> result(CFG_CHIP_COUNT);
+	size_t curChp;
+	
+	for (curChp = 0; curChp < CFG_CHIP_COUNT; curChp ++)
+		result[curChp] = CFG_CHIP_LIST[curChp].chipType;
+	return result;
+}
+
 void ParseConfiguration(GeneralOptions& gOpts, size_t cOptCnt, ChipOptions* cOpts, const Configuration& cfg)
 {
 	Configuration::SectList::const_iterator sectIt;
@@ -142,20 +151,6 @@ void ParseConfiguration(GeneralOptions& gOpts, size_t cOptCnt, ChipOptions* cOpt
 	}
 	
 	return;
-}
-
-static inline UINT32 Str2FCC(const std::string& fcc)
-{
-	//UINT8 buf[4];
-	//strncpy((char*)buf, fcc.c_str(), 4);	// GCC throws Wstringop-truncation here
-	//return	(buf[0] << 24) | (buf[1] << 16) |
-	//		(buf[2] <<  8) | (buf[3] <<  0);
-	UINT32 fccVal = 0x00000000;
-	size_t copySize = (fcc.length() <= 4) ? fcc.length() : 4;
-	for (size_t chrPos = 0; chrPos < copySize; chrPos ++)
-		fccVal = (fccVal << 8) | fcc[chrPos];
-	fccVal <<= 8 * (4 - copySize);
-	return fccVal;
 }
 
 static inline std::string Cfg_GetStrOrDefault(const CfgSection::Unordered& ceList, const std::string& entryName, std::string defaultValue)

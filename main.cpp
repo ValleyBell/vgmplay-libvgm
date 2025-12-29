@@ -38,9 +38,11 @@
 #include <getopt.h>
 
 #include "stdtype.h"
+#include <emu/SoundEmu.h>
 #include "utils.hpp"
 #include "m3uargparse.hpp"
 #include "config.hpp"
+#include "playcfg.hpp"
 #include "version.h"
 
 #ifndef SHARE_PREFIX
@@ -73,6 +75,7 @@ static std::string GenerateOptData(const OptionList& optList, std::vector<struct
 static void PrintVersion(void);
 static void PrintArgumentHelp(const OptionList& optList);
 static int ParseArguments(int argc, char* argv[], const OptionList& optList, Configuration& argCfg);
+static void PrintLibraryInfo(void);
 
 
 // can't initialize an std::vector directly in C++98
@@ -80,6 +83,7 @@ static const OptionItem OPT_LIST_ARR[] =
 {
 	{0, 'h', "help",            NULL,     "show this help screen"},
 	{0, 'v', "version",         NULL,     "show version"},
+	{0, 'L', "lib-info",        NULL,     "show libvgm information (supported formats, sound cores)"},
 	{0, 'w', "dump-wav",        NULL,     "enable WAV dumping"},
 	{1, 'd', "output-device",   "id",     "output device ID"},
 	{1, 'c', "config",          "option", "set configuration option, format: section.key=Data"},
@@ -482,6 +486,9 @@ static int ParseArguments(int argc, char* argv[], const OptionList& optList, Con
 			printf("Usage: %s [options] file1.vgm [file2.vgz] [...]\n", argv[0]);
 			PrintArgumentHelp(optList);
 			return 0;
+		case 'L':	// version
+			PrintLibraryInfo();
+			return 0;
 		case 'w':	// dump-wav
 			argCfg.AddEntry("General", "LogSound", "1");
 			break;
@@ -508,4 +515,86 @@ static int ParseArguments(int argc, char* argv[], const OptionList& optList, Con
 	}
 	
 	return optind;
+}
+
+static void PrintLibraryInfo(void)
+{
+	const char* PLAYBACK_ENGINES[] = {
+		"VGM", "S98", "DRO", "GYM", NULL
+	};
+	std::vector<DEV_ID> cfgDevs = GetConfigurableDevices();
+	
+	printf("Supported formats:\n");
+	for (size_t idx = 0; PLAYBACK_ENGINES[idx] != NULL; idx ++)
+		printf("    - %s\n", PLAYBACK_ENGINES[idx]);
+	printf("\n");
+	
+	printf("Supported sound chips:\n");
+	for (DEV_ID devId = 0x00; devId < 0xFF; devId ++)
+	{
+		const DEV_DECL* devDecl = SndEmu_GetDevDecl(devId, NULL, 0x00);
+		if (devDecl == NULL)
+			continue;
+		
+		const char* devName = devDecl->name(NULL);
+		unsigned int devChns = devDecl->channelCount(NULL);
+		if (devName == NULL && devChns == 0)
+			continue;	// skip dummied-out sound chips
+		
+		printf("    - %-12s", devName);
+		printf("- %2u %s", devChns, (devChns == 1) ? "channel, " : "channels,");
+		
+		printf(" Cores: ");
+		for (size_t coreIdx = 0; devDecl->cores[coreIdx] != NULL; coreIdx ++)
+		{
+			const DEV_DEF* devCore = devDecl->cores[coreIdx];
+			if (coreIdx > 0)
+				printf(", ");
+			printf("%s (%s)", devCore->author, FCC2Str(devCore->coreID).c_str());
+		}
+		printf("\n");
+		
+		const DEVLINK_IDS* devLinkIds = devDecl->linkDevIDs(NULL);
+		if (devLinkIds != NULL && devLinkIds->devCount > 0)
+		{
+			for (size_t linkIdx = 0; linkIdx < devLinkIds->devCount; linkIdx ++)
+			{
+				const DEV_DECL* linkDecl = SndEmu_GetDevDecl(devLinkIds->devIDs[linkIdx], NULL, 0x00);
+				if (linkDecl != NULL)
+				{
+					printf("        links to: %s", linkDecl->name(NULL));
+					unsigned int lcCount = linkDecl->channelCount(NULL);
+					printf(", %u %s\n", lcCount, (lcCount == 1) ? "channel" : "channels");
+				}
+				else
+				{
+					printf("        links to: [missing device ID 0x%02X]\n", devLinkIds->devIDs[linkIdx]);
+				}
+			}
+		}
+		
+		// [debugging feature] check that the sound chip is read from the INI file
+		bool isConfigurable = false;
+		for (size_t cfgDevIdx = 0; cfgDevIdx < cfgDevs.size(); cfgDevIdx ++)
+		{
+			if (cfgDevs[cfgDevIdx] == devId)
+			{
+				isConfigurable = true;
+				break;
+			}
+		}
+		if (! isConfigurable)
+			printf("    %16s!! missing from configuration !!\n", "");
+	}
+	
+	// [debugging feature] check that all devices read from the INI are also available
+	for (size_t cfgDevIdx = 0; cfgDevIdx < cfgDevs.size(); cfgDevIdx++)
+	{
+		DEV_ID devId = cfgDevs[cfgDevIdx];
+		const DEV_DECL* devDecl = SndEmu_GetDevDecl(devId, NULL, 0x00);
+		if (devDecl == NULL)
+			printf("Warning: Device 0x%02X is not compiled in!\n", devId);
+	}
+	
+	return;
 }

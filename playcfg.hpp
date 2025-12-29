@@ -3,6 +3,8 @@
 
 #include <stdtype.h>
 #include <string>
+#include <vector>
+#include "emu/EmuStructs.h"	// for DEV_ID
 
 struct GeneralOptions
 {
@@ -59,6 +61,7 @@ class Configuration;
 class PlayerA;
 
 
+std::vector<DEV_ID> GetConfigurableDevices(void);
 void ParseConfiguration(GeneralOptions& gOpts, size_t cOptCnt, ChipOptions* cOpts, const Configuration& cfg);
 void ApplyCfg_General(PlayerA& player, const GeneralOptions& opts);
 void ApplyCfg_Chip(PlayerA& player, const GeneralOptions& gOpts, const ChipOptions& cOpts);

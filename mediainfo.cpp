@@ -27,7 +27,6 @@
 
 static void Tags_LangFilter(std::map<std::string, std::string>& tags, const std::string& tagName,
 	const std::vector<std::string>& langPostfixes, int defaultLang);
-static inline std::string FCC2Str(UINT32 fcc);
 
 MediaInfo::MediaInfo()
 {
@@ -205,17 +204,6 @@ const char* MediaInfo::GetSongTagForDisp(const std::string& tagName)
 {
 	std::map<std::string, std::string>::const_iterator tagIt = _songTags.find(tagName);
 	return (tagIt == _songTags.end()) ? "" : tagIt->second.c_str();
-}
-
-static inline std::string FCC2Str(UINT32 fcc)
-{
-	char result[5];
-	result[0] = (char)((fcc >> 24) & 0xFF);
-	result[1] = (char)((fcc >> 16) & 0xFF);
-	result[2] = (char)((fcc >>  8) & 0xFF);
-	result[3] = (char)((fcc >>  0) & 0xFF);
-	result[4] = '\0';
-	return std::string(result);
 }
 
 void MediaInfo::EnumerateChips(void)

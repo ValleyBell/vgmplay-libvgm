@@ -32,6 +32,8 @@ static bool utf8_advance(const char** str);
 //char* utf8strseek(const char* str, size_t numChars);
 //void RemoveControlChars(std::string& str);
 //void RemoveQuotationMarks(std::string& str, char quotMark);
+//std::string FCC2Str(UINT32 fcc);
+//UINT32 Str2FCC(const std::string& fcc);
 //void u8printf(const char* format, ...);
 
 
@@ -315,6 +317,31 @@ void RemoveQuotationMarks(std::string& str, char quotMark)
 	str = str.substr(1, lastQmPos - 1);
 	
 	return;
+}
+
+std::string FCC2Str(UINT32 fcc)
+{
+	char result[5];
+	result[0] = (char)((fcc >> 24) & 0xFF);
+	result[1] = (char)((fcc >> 16) & 0xFF);
+	result[2] = (char)((fcc >>  8) & 0xFF);
+	result[3] = (char)((fcc >>  0) & 0xFF);
+	result[4] = '\0';
+	return std::string(result);
+}
+
+UINT32 Str2FCC(const std::string& fcc)
+{
+	//UINT8 buf[4];
+	//strncpy((char*)buf, fcc.c_str(), 4);	// GCC throws Wstringop-truncation here
+	//return	(buf[0] << 24) | (buf[1] << 16) |
+	//		(buf[2] <<  8) | (buf[3] <<  0);
+	UINT32 fccVal = 0x00000000;
+	size_t copySize = (fcc.length() <= 4) ? fcc.length() : 4;
+	for (size_t chrPos = 0; chrPos < copySize; chrPos ++)
+		fccVal = (fccVal << 8) | fcc[chrPos];
+	fccVal <<= 8 * (4 - copySize);
+	return fccVal;
 }
 
 // print UTF-8 string with correct codepage on Windows

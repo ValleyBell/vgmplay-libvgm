@@ -8,6 +8,7 @@ VGMPlay v0.52.0
 ! renamed OKIM6258/95 chips to MSM6258/95
 * updated MAME sound cores: C6280, GameBoy, K054539, Pokey, YMW258
 * improve detection and playback of GYM files
++ added "--lib-info" option that shows supported formats and chips
 
 VGMPlay v0.51.1
 ---------------

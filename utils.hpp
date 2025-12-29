@@ -26,6 +26,8 @@ char* utf8strseek(const char* str, size_t numChars);
 int count_digits(int value);
 void RemoveControlChars(std::string& str);
 void RemoveQuotationMarks(std::string& str, char quotMark);
+std::string FCC2Str(UINT32 fcc);
+UINT32 Str2FCC(const std::string& fcc);
 void u8printf(const char* format, ...);
 std::string urlencode(const std::string& str);
 
