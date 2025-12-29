@@ -1,6 +1,7 @@
 #ifndef __UTILS_HPP__
 #define __UTILS_HPP__
 
+#include "stdtype.h"
 #include <vector>
 #include <string>
 

@@ -12,6 +12,7 @@
 #include <unistd.h>		// for getcwd()
 #endif
 
+#include "stdtype.h"
 #include "utils.hpp"
 
 
