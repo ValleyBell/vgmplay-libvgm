@@ -130,6 +130,8 @@ int main(int argc, char* argv[])
 	printf(APP_NAME);
 	printf("\n----------\n");
 	
+	InitAppSearchPaths(argv[0]);
+	
 	argbase = ParseArguments(argc, argv, optionList, argCfg);
 	if (argbase == 0)
 		return 0;
@@ -145,7 +147,6 @@ int main(int argc, char* argv[])
 	}
 #endif
 	
-	InitAppSearchPaths(argv[0]);
 	cfgFileNames.push_back("VGMPlay.ini");
 	cfgFileNames.push_back("vgmplay.ini");
 	
@@ -584,7 +585,6 @@ static void PrintLibraryInfo(void)
 		if (! isConfigurable)
 			printf("    %16s!! missing from configuration !!\n", "");
 	}
-	
 	// [debugging feature] check that all devices read from the INI are also available
 	for (size_t cfgDevIdx = 0; cfgDevIdx < cfgDevs.size(); cfgDevIdx++)
 	{
@@ -593,6 +593,11 @@ static void PrintLibraryInfo(void)
 		if (devDecl == NULL)
 			printf("Warning: Device 0x%02X is not compiled in!\n", devId);
 	}
+	printf("\n");
+	
+	printf("Configuration/ROM paths:\n");
+	for (size_t idx = 0; idx < appSearchPaths.size(); idx ++)
+		printf("    - %s\n", appSearchPaths[idx].c_str());
 	
 	return;
 }
