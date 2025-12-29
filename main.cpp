@@ -530,11 +530,9 @@ static void PrintLibraryInfo(void)
 	printf("\n");
 	
 	printf("Supported sound chips:\n");
-	for (DEV_ID devId = 0x00; devId < 0xFF; devId ++)
+	for (const DEV_DECL* const* ddcPtr = sndEmu_Devices; *ddcPtr != NULL; ddcPtr ++)
 	{
-		const DEV_DECL* devDecl = SndEmu_GetDevDecl(devId, NULL, 0x00);
-		if (devDecl == NULL)
-			continue;
+		const DEV_DECL* devDecl = *ddcPtr;
 		
 		const char* devName = devDecl->name(NULL);
 		unsigned int devChns = devDecl->channelCount(NULL);
@@ -577,7 +575,7 @@ static void PrintLibraryInfo(void)
 		bool isConfigurable = false;
 		for (size_t cfgDevIdx = 0; cfgDevIdx < cfgDevs.size(); cfgDevIdx ++)
 		{
-			if (cfgDevs[cfgDevIdx] == devId)
+			if (cfgDevs[cfgDevIdx] == devDecl->deviceID)
 			{
 				isConfigurable = true;
 				break;
