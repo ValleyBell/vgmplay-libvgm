@@ -111,6 +111,8 @@ static const ChipCfgSectDef CFG_CHIP_LIST[] =
 	{	DEVID_K005289,	"K005289"},
 	{	DEVID_MSM5205,	"MSM5205"},
 	{	DEVID_MSM5232,	"MSM5232"},
+	{	DEVID_BSMT2000,	"BSMT2000"},
+	{	DEVID_ICS2115,	"ICS2115"},
 };
 static const size_t CFG_CHIP_COUNT = sizeof(CFG_CHIP_LIST) / sizeof(CFG_CHIP_LIST[0]);
 

@@ -3,9 +3,11 @@ VGMPlay v0.52.0
 * fixed a possible crash with high sound chip sample rates
 * fixed VGM v1.00/1.01 FM chip scan (thanks FraGag)
 * improved VirtualBoy VSU emulation (thanks skyfloogle)
-+ added K007232, K005289, MSM5205 (thanks RAintN22)
++ added K007232, K005289, MSM5205, BSMT2000, ICS2115 (thanks RAintN22, cam900)
 * added Mikey and MSM5205 support for PCM streams
 ! renamed OKIM6258/95 chips to MSM6258/95
+* updated MAME sound cores: C6280, GameBoy, K054539, Pokey, YMW258
+* improve detection and playback of GYM files
 
 VGMPlay v0.51.1
 ---------------
