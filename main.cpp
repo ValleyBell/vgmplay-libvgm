@@ -155,10 +155,9 @@ int main(int argc, char* argv[])
 		printf("%s not found - falling back to defaults.\n", cfgFileNames[cfgFileNames.size() - 1].c_str());
 	
 	if (! cfgFilePath.empty())
-	{
 		LoadConfig(cfgFilePath, playerCfg);	// load INI file
-		playerCfg += argCfg;	// override INI settings with commandline options
-	}
+	playerCfg += argCfg;	// override INI settings with commandline options
+	
 #if 0	// print current configuration
 	{
 		printf("Config File:\n");
