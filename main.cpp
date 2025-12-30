@@ -45,10 +45,6 @@
 #include "playcfg.hpp"
 #include "version.h"
 
-#ifndef SHARE_PREFIX
-#define SHARE_PREFIX	"/usr"
-#endif
-
 
 // from playctrl.cpp
 extern UINT8 PlayerMain(UINT8 showFileName);
@@ -252,7 +248,7 @@ static void InitAppSearchPaths(const char* argv_0)
 	
 #ifndef _WIN32
 	// 1. [Unix only] global share directory
-	appSearchPaths.push_back(SHARE_PREFIX "/share/vgmplay/");
+	appSearchPaths.push_back(INSTALL_DATADIR "/vgmplay/");
 #endif
 	
 	// 2. actual application path (potentially resolved symlink)
