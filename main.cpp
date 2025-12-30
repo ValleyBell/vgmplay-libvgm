@@ -87,6 +87,7 @@ static const OptionItem OPT_LIST_ARR[] =
 	{0, 'w', "dump-wav",        NULL,     "enable WAV dumping"},
 	{1, 'd', "output-device",   "id",     "output device ID"},
 	{1, 'c', "config",          "option", "set configuration option, format: section.key=Data"},
+	{1, 'C', "cfg-file",        "path",   "path of config.ini to load, overrides default configuration"},
 };
 static const size_t OPT_LIST_SIZE = sizeof(OPT_LIST_ARR) / sizeof(OPT_LIST_ARR[0]);
 
@@ -131,6 +132,8 @@ int main(int argc, char* argv[])
 	printf("\n----------\n");
 	
 	InitAppSearchPaths(argv[0]);
+	cfgFileNames.push_back("VGMPlay.ini");
+	cfgFileNames.push_back("vgmplay.ini");
 	
 	argbase = ParseArguments(argc, argv, optionList, argCfg);
 	if (argbase == 0)
@@ -147,15 +150,23 @@ int main(int argc, char* argv[])
 	}
 #endif
 	
-	cfgFileNames.push_back("VGMPlay.ini");
-	cfgFileNames.push_back("vgmplay.ini");
-	
-	std::string cfgFilePath = FindFile_List(cfgFileNames, appSearchPaths);
-	if (cfgFilePath.empty())
-		printf("%s not found - falling back to defaults.\n", cfgFileNames[cfgFileNames.size() - 1].c_str());
-	
-	if (! cfgFilePath.empty())
-		LoadConfig(cfgFilePath, playerCfg);	// load INI file
+	if (! cfgFileNames.empty())
+	{
+		std::string cfgFilePath = FindFile_List(cfgFileNames, appSearchPaths);
+		if (! cfgFilePath.empty())
+		{
+			retVal = LoadConfig(cfgFilePath, playerCfg);	// load INI file from common location
+			if (retVal == 0x01)
+				printf("%s: Parsing error\n", cfgFilePath.c_str());
+			else if (retVal)
+				printf("%s: Error 0x%02X\n", cfgFilePath.c_str(), retVal);
+		}
+		else
+		{
+			printf("%s not found - falling back to defaults.\n", cfgFileNames[cfgFileNames.size() - 1].c_str());
+		}
+	}
+
 	playerCfg += argCfg;	// override INI settings with commandline options
 	
 #if 0	// print current configuration
@@ -510,6 +521,16 @@ static int ParseArguments(int argc, char* argv[], const OptionList& optList, Con
 				// reuse INI handler, so that the MuteMask values are put into the correct section
 				IniValHandler(&argCfg, sect, key, val);
 			}
+			break;
+		case 'C':	// configuration file
+			cfgFileNames.clear();
+			retVal = LoadConfig(optarg, playerCfg);	// load INI file from common location
+			if (retVal == 0x01)
+				printf("%s: Parsing error\n", optarg);
+			else if (retVal == 0xF0)
+				printf("%s: File not found\n", optarg);
+			else if (retVal)
+				printf("%s: Error 0x%02X\n", optarg, retVal);
 			break;
 		}
 	}
