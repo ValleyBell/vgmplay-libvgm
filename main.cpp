@@ -81,6 +81,7 @@ static const OptionItem OPT_LIST_ARR[] =
 	{0, 'v', "version",         NULL,     "show version"},
 	{0, 'L', "lib-info",        NULL,     "show libvgm information (supported formats, sound cores)"},
 	{0, 'w', "dump-wav",        NULL,     "enable WAV dumping"},
+	{1, 'W', "dump-path",       "path",   "path of where WAV dumps should be written to"},
 	{1, 'd', "output-device",   "id",     "output device ID"},
 	{1, 'c', "config",          "option", "set configuration option, format: section.key=Data"},
 	{1, 'C', "cfg-file",        "path",   "path of config.ini to load, overrides default configuration"},
@@ -498,6 +499,9 @@ static int ParseArguments(int argc, char* argv[], const OptionList& optList, Con
 			return 0;
 		case 'w':	// dump-wav
 			argCfg.AddEntry("General", "LogSound", "1");
+			break;
+		case 'W':	// dump-path
+			argCfg.AddEntry("General", "LogPath", optarg);
 			break;
 		case 'd':	// output-device
 			argCfg.AddEntry("General", "OutputDevice", optarg);

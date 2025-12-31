@@ -1614,8 +1614,20 @@ static UINT8 StartDiskWriter(const std::string& songFileName)
 	extPtr = GetFileExtension(songFileName.c_str());
 	outFName = (extPtr != NULL) ? std::string(songFileName.c_str(), extPtr - 1) : songFileName;
 	outFName += ".wav";
-	
-	//outFName = std::string("R:/") + GetFileTitle(outFName.c_str());
+	if (!mediaInfo._genOpts.wavLogPath.empty())
+	{
+		const char* logPathTitle = GetFileTitle(mediaInfo._genOpts.wavLogPath.c_str());
+		bool isDir;
+		if (*logPathTitle == '\0')
+			isDir = true;
+		else
+			isDir = PathIsDirectory(mediaInfo._genOpts.wavLogPath);
+		
+		if (isDir)	// directory -> log to specified directory
+			outFName = CombinePaths(mediaInfo._genOpts.wavLogPath, GetFileTitle(outFName.c_str()));
+		else		// full file name -> always write to the respective file name
+			outFName = mediaInfo._genOpts.wavLogPath;
+	}
 	
 	WavWrt_SetFileName(AudioDrv_GetDrvData(adLog.data), outFName.c_str());
 	retVal = AudioDrv_Start(adLog.data, 0);

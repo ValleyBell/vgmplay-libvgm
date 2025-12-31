@@ -10,6 +10,8 @@
 #else
 #include <limits.h>		// for PATH_MAX
 #include <unistd.h>		// for getcwd()
+#include <sys/types.h>
+#include <sys/stat.h>
 #endif
 
 #include "stdtype.h"
@@ -148,6 +150,46 @@ std::string GetAbsolutePath(const std::string& relPath)
 	absPath.resize(strlen(absPath.c_str()));
 	return CombinePaths(absPath, relPath);
 #endif
+}
+
+int CheckFileDirMode(const std::string& path)
+{
+#ifdef _WIN32
+	DWORD attr;
+	
+	attr = GetFileAttributes(path.c_str());
+	if (attr == INVALID_FILE_ATTRIBUTES)
+		return 0;	// not found
+	if (attr & FILE_ATTRIBUTE_DIRECTORY)
+		return 1;	// directory
+	else if (attr & (FILE_ATTRIBUTE_DEVICE | FILE_ATTRIBUTE_REPARSE_POINT))
+		return 2;	// existing, but is something else
+	else
+		return 0;	// regular file
+#else
+	struct stat s;
+	int ret;
+	
+	ret = stat(path.c_str(), &s);
+	if (ret != 0)
+		return -1;	// not found
+	if (s.st_mode & S_IFDIR)
+		return 1;	// directory
+	else if (s.st_mode & S_IFREG)
+		return 0;	// regular file
+	else
+		return 2;	// existing, but is something else
+#endif
+}
+
+bool PathIsFile(const std::string& path)
+{
+	return CheckFileDirMode(path) == 0;
+}
+
+bool PathIsDirectory(const std::string& path)
+{
+	return CheckFileDirMode(path) == 1;
 }
 
 std::string FindFile_List(const std::vector<std::string>& fileList, const std::vector<std::string>& pathList)

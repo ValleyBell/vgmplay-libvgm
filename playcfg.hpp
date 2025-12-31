@@ -24,6 +24,7 @@ struct GeneralOptions
 	UINT32 pauseTime_jingle;
 	UINT32 pauseTime_loop;
 	
+	std::string wavLogPath;
 	UINT8 pbMode;	// playback mode (0 = play, 1 = log to WAV, 2 = play+log)
 	bool soundWhilePaused;
 	bool pseudoSurround;

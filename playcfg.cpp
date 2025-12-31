@@ -263,6 +263,7 @@ static void ParseCfg_General(GeneralOptions& opts, const CfgSection& cfg)
 	opts.pauseTime_loop =	(UINT32)Cfg_GetUIntOrDefault(ceList, "FadePause", 0);
 	
 	opts.pbMode =			 (UINT8)Cfg_GetUIntOrDefault(ceList, "LogSound", 0);
+	opts.wavLogPath =		        Cfg_GetStrOrDefault (ceList, "LogPath", "");
 	opts.soundWhilePaused =	  (bool)Cfg_GetBoolOrDefault(ceList, "EmulatePause", false);
 	opts.pseudoSurround =	  (bool)Cfg_GetBoolOrDefault(ceList, "SurroundSound", false);
 	opts.preferJapTag =		  (bool)Cfg_GetBoolOrDefault(ceList, "PreferJapTag", false);

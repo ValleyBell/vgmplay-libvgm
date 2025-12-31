@@ -58,13 +58,16 @@ Configuration& Configuration::operator+=(const Configuration& rhs)
 	unsigned char state = 0x00;
 	size_t curPos;
 	
-	// remove quotation marks - unless they are escaped with \"
+	// un-quote strings ("str" -> str),
+	// but keep escaped quotation marks (\"str\" -> "str")
 	valStr.reserve(text.size());
 	for (curPos = 0; curPos < text.length(); curPos ++)
 	{
 		if (state & 0x02)
 		{
 			state &= ~0x02;
+			if (text[curPos] != '\"')
+				valStr += text[curPos - 1];
 			valStr += text[curPos];
 		}
 		else if (text[curPos] == '\\')
@@ -82,6 +85,8 @@ Configuration& Configuration::operator+=(const Configuration& rhs)
 			valStr += text[curPos];
 		}
 	}
+	if (state & 0x02)
+		valStr += text[curPos - 1];
 	return valStr;
 }
 
