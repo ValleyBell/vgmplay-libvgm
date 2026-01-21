@@ -216,6 +216,8 @@ void MediaInfo::EnumerateChips(void)
 	for (size_t curDev = 0; curDev < diList.size(); curDev ++)
 	{
 		const PLR_DEV_INFO& pdi = diList[curDev];
+		if (pdi.parentIdx != (UINT32)-1)
+			continue;	// skip linked/child devices
 		if (pdi.type == DEVID_SN76496)
 		{
 			// the T6W28 consists of two "half" chips in VGMs
