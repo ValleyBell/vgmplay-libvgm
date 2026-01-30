@@ -56,6 +56,12 @@ jobs:
     - name: Configure
       run: |
         export CMAKE_MODULE_PATH="${GITHUB_WORKSPACE}/libvgm/install/lib/cmake"${CMAKE_MODULE_PATH:+':'}$CMAKE_MODULE_PATH
+
+        # FIXME: This should prolly be addressed in libvgm's action.yml instead
+        if [ "${{ matrix.config.compiler}}" == "msvc" ]; then
+          CMAKE_OPTS="$CMAKE_OPTS -DZLIB_INCLUDE_DIR=${GITHUB_WORKSPACE}/libvgm/libs/include"
+        fi
+
         cmake ${{ matrix.config.extra_settings }} \
           -B ${GITHUB_WORKSPACE}/build \
           -DCMAKE_INSTALL_PREFIX=${GITHUB_WORKSPACE}/install \
