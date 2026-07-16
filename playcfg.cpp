@@ -149,6 +149,27 @@ void ParseConfiguration(GeneralOptions& gOpts, size_t cOptCnt, ChipOptions* cOpt
 			ParseCfg_ChipSection(cOpts[cfgChip.chipType], sectIt->second, cfgChip.chipType);
 		else
 			ParseCfg_ChipSection(cOpts[cfgChip.chipType], dummySect, cfgChip.chipType);
+		// per-instance chip control: [Chip#N] or [Chip-N] where N is 0 or 1
+		for (UINT8 inst = 0; inst < 2; inst ++)
+		{
+			char iSect[32]; char suf[4];
+			sectIt = cfg._sections.end();
+			suf[0] = '#'; suf[1] = '0' + inst; suf[2] = 0;
+			strcpy(iSect, cfgChip.entryName); strcat(iSect, suf);
+			sectIt = cfg._sections.find(iSect);
+			if (sectIt == cfg._sections.end())
+			{
+				suf[0] = '-';
+				strcpy(iSect, cfgChip.entryName); strcat(iSect, suf);
+				sectIt = cfg._sections.find(iSect);
+			}
+			if (sectIt != cfg._sections.end())
+			{
+				size_t slot = 0x100 + ((size_t)cfgChip.chipType << 1) + inst;
+				ParseCfg_ChipSection(cOpts[slot], sectIt->second, cfgChip.chipType);
+				cOpts[slot].chipInstance = inst;
+			}
+		}
 	}
 	
 	return;
