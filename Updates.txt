@@ -3,6 +3,9 @@ VGMPlay v0.52.1
 * update NukedOPM to 1.0 (thanks sunkhaskasis)
 * improved VirtualBoy VSU emulation (thanks skyfloogle)
 + added GameBoy core from SameBoy emulator
+* updated NukedOPL3
+* updated ICS2115 (thanks cam900)
+* improved Atari Lynx emulation (thanks drhelius)
 
 VGMPlay v0.52.0
 ---------------

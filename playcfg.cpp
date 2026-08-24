@@ -688,6 +688,8 @@ static void ParseCfg_ChipSection(ChipOptions& opts, const CfgSection& cfg, UINT8
 	case DEVID_GB_DMG:
 		opts.addOpts |= Cfg_GetBoolOrDefault(ceuList, "LegacyMode", true) ? OPT_GB_DMG_LEGACY_MODE: 0x00;
 		opts.addOpts |= Cfg_GetBoolOrDefault(ceuList, "NoWaveCorrupt", false) ? OPT_GB_DMG_NO_WAVE_CORRUPT : 0x00;
+		opts.addOpts |= Cfg_GetBoolOrDefault(ceuList, "NoDCOffset", false) ? OPT_GB_DMG_NO_DC_OFFSET : 0x00;
+		opts.addOpts |= Cfg_GetBoolOrDefault(ceuList, "HighpassFilter", true) ? OPT_GB_DMG_HIGHPASS : 0x00;
 		break;
 	case DEVID_NES_APU:
 		opts.addOpts |= (Cfg_GetUIntOrDefault(ceuList, "SharedOpts", 0x03) & 0x03) << 0;
