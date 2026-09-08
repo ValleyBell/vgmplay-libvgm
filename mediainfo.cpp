@@ -227,7 +227,7 @@ void MediaInfo::EnumerateChips(void)
 		const char* chipName = SndEmu_GetDevName(pdi.type, 0x01, pdi.devCfg);
 		
 		DeviceItem dItm;
-		dItm.name = chipName;
+		dItm.name = (chipName != NULL) ? chipName : "?";
 		dItm.core = FCC2Str(pdi.core);
 		_chipList.push_back(dItm);
 	}
