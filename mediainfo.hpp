@@ -82,7 +82,7 @@ public:
 	
 	volatile UINT8 _playState;
 	GeneralOptions _genOpts;
-	ChipOptions _chipOpts[0x100];
+	ChipOptions _chipOpts[0x300];
 	PlayerA _player;
 	
 	std::string _fileFmt;
