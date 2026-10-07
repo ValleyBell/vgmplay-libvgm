@@ -173,7 +173,7 @@ UINT8 PlayerMain(UINT8 showFileName)
 	else
 		fnShowMode = 0;
 	
-	ParseConfiguration(genOpts, 0x100, mediaInfo._chipOpts, playerCfg);
+	ParseConfiguration(genOpts, 0x300, mediaInfo._chipOpts, playerCfg);
 	
 	{
 		// Manual initialization of adOut/adLog, because MSVC6 is unable to
@@ -220,7 +220,7 @@ UINT8 PlayerMain(UINT8 showFileName)
 	myPlayer.SetFileReqCallback(PlayerFileReqCallback, NULL);
 	myPlayer.SetLogCallback(PlayerLogCallback, NULL);
 	ApplyCfg_General(myPlayer, genOpts);
-	for (size_t curChp = 0; curChp < 0x100; curChp ++)
+	for (size_t curChp = 0; curChp < 0x300; curChp ++)
 	{
 		const ChipOptions& cOpt = mediaInfo._chipOpts[curChp];
 		if (cOpt.chipType == 0xFF)
