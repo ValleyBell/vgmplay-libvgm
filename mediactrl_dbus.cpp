@@ -969,6 +969,7 @@ UINT8 MediaCtrlDBus::Init(MediaInfo& mediaInfo)
 	connection = dbus_bus_get(DBUS_BUS_SESSION, NULL);
 	if(!connection)
 		return 0x00;
+	dbus_connection_set_exit_on_disconnect(connection, FALSE);
 
 	_dbus_name.resize(0x80);
 	pid_t pid = getpid();
